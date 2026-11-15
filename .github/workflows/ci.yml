@@ -1,0 +1,36 @@
+name: Tauri Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install wrapper dependencies
+        run: npm install --no-audit --no-fund
+      - name: Prepare Web frontend
+        run: npm run setup:web
+      - name: Build Windows installer
+        run: npm run build
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-windows
+          path: src-tauri/target/release/bundle/nsis/*
+          if-no-files-found: error
