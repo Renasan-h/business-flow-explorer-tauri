@@ -1,0 +1,9 @@
+node_modules/
+web/
+src-tauri/target/
+src-tauri/gen/schemas/
+src-tauri/gen/android/
+src-tauri/gen/apple/
+*.msi
+*.exe
+.env
