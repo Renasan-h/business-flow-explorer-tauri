@@ -2,7 +2,7 @@ name: Tauri Windows CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop_tauri]
   pull_request:
   workflow_dispatch:
 
