@@ -7,7 +7,9 @@
     "setup:web": "node scripts/setup-web.mjs",
     "dev": "tauri dev",
     "build": "tauri build",
-    "check": "cargo check --manifest-path src-tauri/Cargo.toml"
+    "check": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "predev": "node scripts/generate-icon.mjs",
+    "prebuild": "node scripts/generate-icon.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"
