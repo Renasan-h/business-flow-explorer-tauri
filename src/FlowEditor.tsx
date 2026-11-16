@@ -21,17 +21,17 @@ import EditorContextMenu, { type EditorContextMenuState } from './editor/EditorC
 import { resolveEditorSelection } from './editor/selection';
 import { resolveWaypointHandle } from './editor/resolveWaypointHandle';
 import { useEditorWheelZoom } from './editor/useEditorWheelZoom';
-import { actorsInSelection, boundedGroupDelta, moveSelectedActors, selectionRectangle } from './editor/multiSelection';
+import { actorsInSelection, moveSelectedActors, selectionRectangle } from './editor/multiSelection';
 import { useMultiSelectionPointerState } from './editor/useMultiSelectionPointerState';
 import { resolveMultiSelectionStart } from './editor/multiSelectionPointerStart';
-import { clampNodePosition, containsNodePoint } from './editor/nodeGeometry';
+import { containsNodePoint } from './editor/nodeGeometry';
 import { playbackOrderPoint, playbackOrderRadius } from './editor/playbackOrderGeometry';
 import { validateEditorScenario } from './editor/validateEditorScenario';
 import { editorScenarioFilename } from './editor/editorScenarioFilename';
 import { screenDragDelta, screenToWorldPoint } from './editor/coordinates';
-import { boundedGroupOrigin, visibleCanvasCenter } from './editor/visibleCanvasPlacement';
+import { visibleCanvasCenter } from './editor/visibleCanvasPlacement';
 import { insertWaypointBetweenNodes } from './editor/waypointInsertion';
-import { clampWaypoint, moveWaypoint, waypointMenuState } from './editor/waypointEditing';
+import { moveWaypoint, waypointMenuState } from './editor/waypointEditing';
 
 type Actor = Scenario['actors'][number];
 type Step = Scenario['steps'][number];
@@ -79,6 +79,18 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const waypointDrag = useRef<{ pointerId: number; stepId: string; index: number; direction: 'forward' | 'reverse' } | null>(null);
  const [zoom, setZoom] = useState(1);
  const [offset, setOffset] = useState({ x: 0, y: 0 });
+ const [viewport, setViewport] = useState({ width: 1100, height: 650 });
+ // SVGの表示サイズをキャンバスの実寸に同期し、固定3600x1800のスクロール面を使わない。
+ useEffect(() => {
+  const canvas = canvasRef.current;
+  if (!canvas) return;
+  const update = () => setViewport({ width: Math.max(1, canvas.clientWidth), height: Math.max(1, canvas.clientHeight) });
+  update();
+  const observer = new ResizeObserver(update);
+  observer.observe(canvas);
+  return () => observer.disconnect();
+ }, [preview]);
+
  const [message, setMessage] = useState('');
  const [preview, setPreview] = useState(false);
  const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
@@ -108,13 +120,14 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
 
  const drag = useRef<{ id: number; actorId: string | null; resizeActor?: boolean; groupId?: string; resizeGroup?: boolean; initialMembers?: { id: string; x: number; y: number }[]; initialSize?: { width: number; height: number }; x: number; y: number; initial: { x: number; y: number }; offset: { x: number; y: number } } | null>(null);
  const activeActor = actors.find(actor => actor.id === selectedActor);
- // 初期表示をワールド中央に合わせる。既存ノード座標や保存データは変更しない。
+ // 初回は従来のキャンバス中心を表示する。以降はパン・ズーム状態を維持する。
+ const viewInitialized = useRef(false);
  useEffect(() => {
-  const canvas = canvasRef.current;
-  if (!canvas) return;
-  canvas.scrollLeft = Math.max(0, (canvas.scrollWidth - canvas.clientWidth) / 2);
-  canvas.scrollTop = Math.max(0, (canvas.scrollHeight - canvas.clientHeight) / 2);
- }, [preview]);
+  if (viewInitialized.current) return;
+  if (viewport.width <= 1 || viewport.height <= 1) return;
+  setOffset({ x: viewport.width / 2 - WIDTH / 2, y: viewport.height / 2 - HEIGHT / 2 });
+  viewInitialized.current = true;
+ }, [viewport.width, viewport.height]);
  const activeStep = steps.find(step => step.id === selectedStep);
 
  // ポインター座標を拡大率と移動量を考慮したワールド座標へ変換する。
@@ -512,7 +525,17 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (!(event.target as Element).closest('.editor-context-menu')) setContextMenu(null);
  }}>
   <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
-  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={setZoom} resetView={() => { setOffset({ x: 0, y: 0 }); const canvas = canvasRef.current; if (canvas) { canvas.scrollLeft = (canvas.scrollWidth - canvas.clientWidth) / 2; canvas.scrollTop = (canvas.scrollHeight - canvas.clientHeight) / 2; } }} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
+  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={setZoom} resetView={() => {
+   const xs = actors.map(a => a.position.x);
+   const ys = actors.map(a => a.position.y);
+   const minX = xs.length ? Math.min(...xs) - 160 : 0;
+   const maxX = xs.length ? Math.max(...xs) + 160 : WIDTH;
+   const minY = ys.length ? Math.min(...ys) - 120 : 0;
+   const maxY = ys.length ? Math.max(...ys) + 120 : HEIGHT;
+   const fit = Math.min(2.5, Math.max(.3, Math.min(viewport.width / Math.max(1, maxX - minX), viewport.height / Math.max(1, maxY - minY))));
+   setZoom(fit);
+   setOffset({ x: viewport.width / 2 - ((minX + maxX) / 2) * fit, y: viewport.height / 2 - ((minY + maxY) / 2) * fit });
+  }} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
   {exitConfirmationOpen && <div className="editor-exit-backdrop" role="presentation">
    <div className="editor-exit-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-exit-title">
     <h3 id="editor-exit-title">未保存の変更があります</h3>
@@ -544,7 +567,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
      else if (stepId) { setSelectedStep(stepId); setSelectedActor(null); setSelectedGroup(null); }
      else if (groupId) { setSelectedGroup(groupId); setSelectedActor(null); setSelectedStep(null); }
     }}>
-    <svg ref={svgRef} viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="編集可能なノード接続図"
+    <svg ref={svgRef} viewBox={`0 0 ${viewport.width} ${viewport.height}`} role="img" aria-label="編集可能なノード接続図"
      onPointerDown={event => {
       if (event.button !== 0) return;
       const target = event.target as Element;
