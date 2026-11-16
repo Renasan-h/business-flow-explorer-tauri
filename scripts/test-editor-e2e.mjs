@@ -44,7 +44,7 @@ try {
   // 複数のpointermoveを伴うドラッグを1回のUndoで元の座標へ戻せること。
   await page.keyboard.press('Control+z');
   const undone = await node.locator('rect').first().getAttribute('x');
-  if (undone !== start) throw new Error('One Ctrl+Z did not undo the entire drag');
+  if (undone !== start) throw new Error(`One Ctrl+Z did not undo the entire drag: start=${start}, end=${end}, undone=${undone}`);
   await page.keyboard.press('Control+y');
   const redone = await node.locator('rect').first().getAttribute('x');
   if (redone !== end) throw new Error('Ctrl+Y did not restore the dragged position');
