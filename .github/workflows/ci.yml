@@ -30,6 +30,8 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Check TypeScript and build frontend
         run: npm run build:web
+      - name: Verify generated scenario manifest is committed
+        run: git diff --exit-code -- public/scenarios/manifest.json
       - name: Check Rust application
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Build Windows executable (without installer)
