@@ -181,7 +181,9 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  for (const entry of data.steps ?? []) {
   if ('file' in entry) {
    const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot);
-   if (!fragment.root) throw new Error('サブシナリオにはschemaVersionとmetadataが必要です: ' + entry.file);
+   // steps内のfile参照はstepsだけを持つ断片YAMLも許可する。
+   // 親シナリオのschemaVersionとmetadataはloadScenarioで検証する。
+   if (fragment.root) throw new Error('steps内のfileには親シナリオを指定できません: ' + entry.file);
    fragment.actors.forEach(addActor);
    // ファイル境界の通信を明示した場合は、通常ステップとして挿入する。
    if (entry.handoff) {
