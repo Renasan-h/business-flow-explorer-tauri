@@ -6,6 +6,7 @@
 
 - `src/`：Web版から取り込んだReactソース（Tauri版で独立管理）
 - `src-tauri/`：Tauri 2 / Rustアプリ
+- `.github/workflows/full-check.yml`：`develop_tauri` / `main` のpush時にフロントエンドとRustを一括検証
 - `.github/workflows/frontend-check.yml`：TypeScriptとWebビルドの検証
 - `.github/workflows/rust-test.yml`：Rustユニットテスト
 - `.github/workflows/rust-check.yml`：Rustコンパイル検証
@@ -34,6 +35,8 @@ npm run build
 
 ## CI運用
 
+- **push後の必須確認**：`develop_tauri` と `main` へのpushで `Full development checks` が自動実行されます。次の改修に進む前に、対象コミットの実行結果が `success` になったことを確認してください。失敗した場合は原因を修正し、再実行の成功を確認します。
+- 統合CIはWindows上でフロントエンドビルド・シナリオマニフェスト整合性検証（`develop_tauri`）・アイコン生成・`cargo test`・`cargo check` を実行します。インストーラーやZIPは作成しません。
 - 開発用の `Frontend checks`、`Rust unit tests`、`Rust compile check` は、変更されたファイルに応じて `main` 向けPull Request時に実行されます。ブランチへのpushだけでは起動しません。
 - 開発中に手動でテストしたい場合は、Actionsから目的のワークフローを選び、`Run workflow` で `develop_tauri` または作業ブランチを指定して実行します。
 - 目的別CIではフロントエンド検証、`cargo test`、`cargo check` を個別に実行します。Rust側の検証でもTauriのビルドスクリプト用にWebの `dist` を事前生成しますが、インストーラーやZIPは生成しません。
@@ -43,7 +46,7 @@ npm run build
 
 ## 開発方針と現状
 
-初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルフォルダ操作のRustコマンドは実装中ですが、React画面との接続・動作確認は未完了です。Web版のブラウザ制約がそのまま残る操作もあります。
+初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルフォルダの選択・YAML一覧・読み込み・新規作成・保存を行うRustコマンドとReact側の呼び出しは実装されています。ただしWindows実機でのGUI操作全体については、統合CIだけで動作保証できません。Web版のブラウザ制約がそのまま残る操作もあります。
 
 今後はTauriのファイルダイアログ・ファイルシステム権限を最小限に設定し、Web版とデスクトップ版の保存処理を分離します。Web版のリポジトリは変更しません。
 
