@@ -573,3 +573,13 @@ aside button.icon-close-button,
 .app header .header-directory select:disabled{opacity:.55;cursor:default}
 .app header .header-directory select option{background:var(--panel);color:var(--text)}
 @media(max-width:900px){.app header{flex-wrap:wrap;gap:12px}.app header .header-brand{flex-wrap:wrap;gap:10px}.app header .header-directory{max-width:100%}.app header .header-directory select{width:clamp(150px,40vw,320px)}}
+
+
+/* 再生領域は利用可能な横幅を使い切り、右側に固定の空白を残さない。 */
+.app>.layout>main{max-width:none;margin:0;min-width:0}
+.app .scene-size-wrapper{margin-left:0;margin-right:0}
+
+/* 大量の再生ステップは横一列のスクロールではなく、折り返す一覧で選択する。 */
+.app .steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:8px;overflow-x:visible;overflow-y:visible;padding:12px 0;align-items:stretch}
+.app .steps>button{width:100%;max-width:none;min-width:0;min-height:40px;margin:0;text-align:left;white-space:normal;overflow-wrap:anywhere}
+@media(max-width:600px){.app .steps{grid-template-columns:repeat(auto-fill,minmax(min(100%,150px),1fr))}}
