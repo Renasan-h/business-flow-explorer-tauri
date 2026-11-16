@@ -119,6 +119,45 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   Object.fromEntries(initial.actors.map((actor, index) => [actor.id, index + 1])));
 
  const drag = useRef<{ id: number; actorId: string | null; resizeActor?: boolean; groupId?: string; resizeGroup?: boolean; initialMembers?: { id: string; x: number; y: number }[]; initialSize?: { width: number; height: number }; x: number; y: number; initial: { x: number; y: number }; offset: { x: number; y: number } } | null>(null);
+
+ // ドラッグ中にビューポート端へ近づいたら、ポインターが止まっていても自動パンを継続する。
+ const edgePointer = useRef<{ id: number; x: number; y: number } | null>(null);
+ useEffect(() => {
+  let frame = 0;
+  const tick = () => {
+   const pointer = edgePointer.current;
+   const canvas = canvasRef.current;
+   if (pointer && canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const margin = 48;
+    const speed = 9;
+    const axis = (value: number, start: number, end: number) =>
+     value < start + margin ? speed : value > end - margin ? -speed : 0;
+    const px = axis(pointer.x, rect.left, rect.right);
+    const py = axis(pointer.y, rect.top, rect.bottom);
+    if (px || py) {
+     setOffset(previous => ({ x: previous.x + px, y: previous.y + py }));
+     const worldDx = -px / zoom;
+     const worldDy = -py / zoom;
+     const single = drag.current;
+     const multiple = multiDrag.current;
+     if (single?.id === pointer.id && single.actorId && !single.resizeActor) {
+      single.initial = { x: single.initial.x + worldDx, y: single.initial.y + worldDy };
+      setActors(items => items.map(actor => actor.id === single.actorId
+       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor));
+     } else if (multiple?.pointerId === pointer.id) {
+      multiple.initial = multiple.initial.map(item => ({ ...item, x: item.x + worldDx, y: item.y + worldDy }));
+      const selected = new Set(multiple.initial.map(item => item.id));
+      setActors(items => items.map(actor => selected.has(actor.id)
+       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor));
+     }
+    }
+   }
+   frame = requestAnimationFrame(tick);
+  };
+  frame = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(frame);
+ }, [zoom]);
  const activeActor = actors.find(actor => actor.id === selectedActor);
  // 初回は従来のキャンバス中心を表示する。以降はパン・ズーム状態を維持する。
  const viewInitialized = useRef(false);
@@ -660,6 +699,8 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       event.currentTarget.setPointerCapture(event.pointerId);
      }}
      onPointerMove={event => {
+      if (drag.current?.id === event.pointerId || multiDrag.current?.pointerId === event.pointerId) edgePointer.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      else edgePointer.current = null;
       if (marquee.current?.pointerId === event.pointerId) {
        setMarqueeEnd(toWorld(event.clientX, event.clientY));
        return;
@@ -729,6 +770,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       }
      }}
      onPointerUp={event => {
+      edgePointer.current = null;
       if (marquee.current?.pointerId === event.pointerId) {
        const selection = marquee.current;
        const end = toWorld(event.clientX, event.clientY);
@@ -759,7 +801,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       }
       if (drag.current?.id === event.pointerId) drag.current = null;
      }}
-     onPointerCancel={() => { resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
+     onPointerCancel={() => { edgePointer.current = null; resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
      <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
       <EditorGroups groups={groups} selectedGroup={selectedGroup} tool={tool} onSelect={id => { setSelectedGroup(id); setSelectedActor(null); setSelectedStep(null); }}/>
       <EditorEdges actors={actors} steps={steps} showLines={showLines} selectedStep={selectedStep} tool={tool} onSelect={id => { setSelectedStep(id); setSelectedActor(null); setSelectedGroup(null); }}/>
