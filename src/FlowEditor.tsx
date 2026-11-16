@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parse, stringify } from 'yaml';
 import { loadTemplateFragment, parseTemplateYaml, type Scenario } from './scenario';
 import FlowPreview from './FlowPreview';
@@ -107,6 +107,60 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const snapshot = () => JSON.stringify({ actors, steps, metadata, groups, interfaces, templateReferences });
  const savedSnapshot = useRef<string | null>(null);
  if (savedSnapshot.current === null) savedSnapshot.current = snapshot();
+ // 編集データ全体を履歴化する。選択状態・ズーム・パンは履歴に含めない。
+ type EditorHistory = { actors: Actor[]; steps: Step[]; metadata: typeof metadata; groups: typeof groups; interfaces: typeof interfaces; templateReferences: typeof templateReferences };
+ const history = useRef<EditorHistory[]>([]);
+ const historyIndex = useRef(-1);
+ const restoringHistory = useRef(false);
+ const [historyRevision, setHistoryRevision] = useState(0);
+ const currentHistory = (): EditorHistory => structuredClone({ actors, steps, metadata, groups, interfaces, templateReferences });
+ const historyKey = snapshot();
+ useLayoutEffect(() => {
+  if (restoringHistory.current) { restoringHistory.current = false; return; }
+  const previous = history.current[historyIndex.current];
+  if (previous && JSON.stringify(previous) === historyKey) return;
+  history.current = history.current.slice(0, historyIndex.current + 1);
+  history.current.push(currentHistory());
+  // 長時間の編集でも履歴が無制限に増加しないよう上限を設ける。
+  if (history.current.length > 100) history.current.shift();
+  historyIndex.current = history.current.length - 1;
+  setHistoryRevision(value => value + 1);
+ }, [historyKey]);
+ const restoreHistory = (direction: -1 | 1) => {
+  const index = historyIndex.current + direction;
+  if (index < 0 || index >= history.current.length) return;
+  const state = structuredClone(history.current[index]);
+  historyIndex.current = index;
+  restoringHistory.current = true;
+  setActors(state.actors);
+  setSteps(state.steps);
+  setMetadata(state.metadata);
+  setGroups(state.groups);
+  setInterfaces(state.interfaces);
+  setTemplateReferences(state.templateReferences);
+  setSelectedActor(null);
+  setSelectedActors([]);
+  setSelectedStep(null);
+  setSelectedGroup(null);
+  setContextMenu(null);
+  setHistoryRevision(value => value + 1);
+ };
+ const canUndo = historyRevision >= 0 && historyIndex.current > 0;
+ const canRedo = historyRevision >= 0 && historyIndex.current < history.current.length - 1;
+ useEffect(() => {
+  const handleKeyDown = (event: KeyboardEvent) => {
+   if (!(event.ctrlKey || event.metaKey) || event.altKey || event.isComposing) return;
+   const target = event.target as HTMLElement | null;
+   if (target?.closest('input, textarea, select, [contenteditable="true"]')) return;
+   const key = event.key.toLowerCase();
+   if (key !== 'z' && key !== 'y') return;
+   event.preventDefault();
+   if (key === 'y' || (key === 'z' && event.shiftKey)) restoreHistory(1);
+   else restoreHistory(-1);
+  };
+  window.addEventListener('keydown', handleKeyDown);
+  return () => window.removeEventListener('keydown', handleKeyDown);
+ });
  // 未保存時はネイティブconfirmではなく画面内で3択を明示する。
  const requestExit = () => {
   if (snapshot() === savedSnapshot.current) { onClose(); return; }
@@ -570,7 +624,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  return <div className="flow-editor" onPointerDown={event => {
   if (!(event.target as Element).closest('.editor-context-menu')) setContextMenu(null);
  }}>
-  <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
+  <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button type="button" disabled={!canUndo} onClick={() => restoreHistory(-1)} title="Ctrl+Z">↶ 戻す</button><button type="button" disabled={!canRedo} onClick={() => restoreHistory(1)} title="Ctrl+Y">↷ やり直す</button><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
   <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={updateZoomAroundCenter} resetView={() => {
    const xs = actors.map(a => a.position.x);
    const ys = actors.map(a => a.position.y);
