@@ -1,7 +1,7 @@
 // index.json は探索対象のディレクトリだけを指定する。
 // 静的ホスティングではブラウザからディレクトリ一覧を取得できないため、
 // 開発・ビルド前に直下の親シナリオだけをマニフェストへ展開する。
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { join, resolve, relative, sep } from 'node:path';
 import { parse } from 'yaml';
 
@@ -12,11 +12,17 @@ const config = JSON.parse(await readFile(indexPath, 'utf8'));
 if (!config || !Array.isArray(config.directories)) {
  throw new Error('index.json は {"directories":[".","subdir"]} 形式にしてください');
 }
+const canonicalRoot = await realpath(root);
 const found = new Set();
 for (const directory of config.directories) {
  if (typeof directory !== 'string' || !directory.trim()) throw new Error('不正なディレクトリ名です');
  const full = resolve(root, directory);
  if (full !== root && !full.startsWith(root + sep)) throw new Error('scenarios外のパスは指定できません: ' + directory);
+ // シンボリックリンク経由でもルート外のディレクトリを読み込ませない。
+ const canonicalDirectory = await realpath(full);
+ if (canonicalDirectory !== canonicalRoot && !canonicalDirectory.startsWith(canonicalRoot + sep)) {
+  throw new Error('scenarios外を指すディレクトリは指定できません: ' + directory);
+ }
  const entries = await readdir(full, { withFileTypes: true });
  for (const entry of entries) {
   // 第2階層以降のファイルや、親定義を持たない断片YAMLは一覧に載せない。
