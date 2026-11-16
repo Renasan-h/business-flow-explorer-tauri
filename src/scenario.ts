@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { z } from 'zod';
 import { parse } from 'yaml';
 import { layoutActors } from './layout';
@@ -126,9 +127,17 @@ async function readFragments(path: string, ancestors: Set<string>): Promise<{
  const canonical = url.pathname;
  if (ancestors.has(canonical)) throw new Error('シナリオの循環参照: ' + [...ancestors, canonical].join(' → '));
  const nextAncestors = new Set([...ancestors, canonical]);
- const response = await fetch(canonical, { cache: 'no-store' });
- if (!response.ok) throw new Error('シナリオの読み込みに失敗しました: ' + canonical);
- const parsed: unknown = parse(await response.text()) ?? {};
+ const relative = canonical.startsWith('/scenarios/native/') ? canonical.slice('/scenarios/native/'.length) : null;
+ let yaml: string;
+ if (relative !== null) {
+  yaml = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(relative) });
+ } else {
+  const bundledPath = canonical.replace(/^\/scenarios\/0\//, '/scenarios/');
+  const response = await fetch(bundledPath, { cache: 'no-store' });
+  if (!response.ok) throw new Error('シナリオの読み込みに失敗しました: ' + canonical);
+  yaml = await response.text();
+ }
+ const parsed: unknown = parse(yaml) ?? {};
  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('YAMLのルートはオブジェクトである必要があります: ' + canonical);
  const isRoot = 'schemaVersion' in parsed || 'metadata' in parsed;
  const data = isRoot ? scenarioSchema.parse(parsed) : fragmentSchema.parse(parsed);
@@ -217,9 +226,20 @@ export async function loadScenario(path: string): Promise<Scenario> {
 }
 
 export async function listScenarios(rootId = '0'): Promise<string[]> {
- const response = await fetch('/scenarios/' + encodeURIComponent(rootId) + '/manifest.json', { cache: 'no-store' });
+ if (rootId === 'native') {
+  const files = await invoke<string[]>('list_scenario_files');
+  // 断片ファイルは一覧から除外し、親シナリオだけを表示する。
+  const parents = await Promise.all(files.map(async file => {
+   const yaml = await invoke<string>('read_scenario_file', { relativePath: file });
+   const data: unknown = parse(yaml);
+   return data && typeof data === 'object' && 'schemaVersion' in data && 'metadata' in data
+    ? '/scenarios/native/' + file.split('/').map(encodeURIComponent).join('/') : null;
+  }));
+  return parents.filter((path): path is string => path !== null);
+ }
+ const response = await fetch('/scenarios/manifest.json', { cache: 'no-store' });
  if (!response.ok) throw new Error('Scenario index load failed');
- return z.array(z.string()).parse(await response.json());
+ return z.array(z.string()).parse(await response.json()).map(path => path.replace(/^\/scenarios\//, '/scenarios/0/'));
 }
 
 /** 再生開始時だけ双方向の復路設定を検証する。読み込み・編集は妨げない。 */
