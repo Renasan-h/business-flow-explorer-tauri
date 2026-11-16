@@ -238,6 +238,42 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_extensions_and_parent_paths() {
+        for path in ["scenario.txt", "scenario.yaml/child.yml", "nested/../../escape.yaml", ".", "nested/."] {
+            assert!(validate_relative_path(path).is_err(), "{path}");
+        }
+        assert!(validate_relative_path("nested/valid.YML").is_ok());
+    }
+
+    #[test]
+    fn preserves_existing_yaml_when_backup_conflicts() {
+        let root = std::env::temp_dir().join(format!("bfe-backup-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        let backup = root.join(format!(".scenario.yaml.{}.backup", std::process::id()));
+        fs::write(&target, "original").unwrap();
+        fs::write(&backup, "reserved").unwrap();
+        assert!(replace_yaml(&target, "new content").is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "reserved");
+        let leftovers = fs::read_dir(&root).unwrap().filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
+        assert_eq!(leftovers, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_creating_yaml_in_missing_parent_directory() {
+        let root = std::env::temp_dir().join(format!("bfe-missing-parent-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        assert!(create_yaml(&root, "missing/new.yaml", "data").is_err());
+        assert!(!root.join("missing/new.yaml").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
