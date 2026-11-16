@@ -24,6 +24,8 @@ jobs:
           workspaces: src-tauri
       - name: Install application dependencies
         run: npm install --no-audit --no-fund
+      - name: Generate Windows icon
+        run: node scripts/generate-icon.mjs
       - name: Test native YAML commands
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build Windows installer
