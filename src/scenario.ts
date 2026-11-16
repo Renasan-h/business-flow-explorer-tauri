@@ -230,10 +230,16 @@ export async function listScenarios(rootId = '0'): Promise<string[]> {
   const files = await invoke<string[]>('list_scenario_files');
   // 断片ファイルは一覧から除外し、親シナリオだけを表示する。
   const parents = await Promise.all(files.map(async file => {
-   const yaml = await invoke<string>('read_scenario_file', { relativePath: file });
-   const data: unknown = parse(yaml);
-   return data && typeof data === 'object' && 'schemaVersion' in data && 'metadata' in data
-    ? '/scenarios/native/' + file.split('/').map(encodeURIComponent).join('/') : null;
+   try {
+    const yaml = await invoke<string>('read_scenario_file', { relativePath: file });
+    const data: unknown = parse(yaml);
+    return data && typeof data === 'object' && 'schemaVersion' in data && 'metadata' in data
+     ? '/scenarios/native/' + file.split('/').map(encodeURIComponent).join('/') : null;
+   } catch (error) {
+    // 破損したYAMLが1件あっても他のシナリオ一覧を表示できるようにする。
+    console.warn('シナリオ一覧から除外:', file, error);
+    return null;
+   }
   }));
   return parents.filter((path): path is string => path !== null);
  }
