@@ -47,6 +47,12 @@ try {
   console.log('PASS: 30% drag, viewport fit, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
-  server.kill();
-  if (process.platform === 'win32') spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], { shell: true });
+  if (process.platform === 'win32') {
+    const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], { stdio: 'ignore' });
+    await new Promise(resolve => killer.once('close', resolve));
+  } else {
+    server.kill('SIGTERM');
+  }
+  server.stdout?.destroy();
+  server.stderr?.destroy();
 }
