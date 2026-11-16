@@ -41,6 +41,13 @@ try {
   await page.mouse.up();
   const end = await node.locator('rect').first().getAttribute('x');
   if (start === end) throw new Error('Node did not move at 30% zoom');
+  // 複数のpointermoveを伴うドラッグを1回のUndoで元の座標へ戻せること。
+  await page.keyboard.press('Control+z');
+  const undone = await node.locator('rect').first().getAttribute('x');
+  if (undone !== start) throw new Error('One Ctrl+Z did not undo the entire drag');
+  await page.keyboard.press('Control+y');
+  const redone = await node.locator('rect').first().getAttribute('x');
+  if (redone !== end) throw new Error('Ctrl+Y did not restore the dragged position');
   await page.getByRole('button', { name: '表示リセット' }).click();
   // プレビューへの遷移で編集データを破棄・再初期化しないことを確認する。
   const beforePreview = await node.locator('rect').first().getAttribute('x');
@@ -60,7 +67,7 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, atomic drag undo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
