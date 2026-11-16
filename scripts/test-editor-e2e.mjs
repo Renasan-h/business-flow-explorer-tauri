@@ -36,6 +36,16 @@ try {
   const end = await node.locator('rect').first().getAttribute('x');
   if (start === end) throw new Error('Node did not move at 30% zoom');
   await page.getByRole('button', { name: '表示リセット' }).click();
+  // プレビューへの遷移で編集データを破棄・再初期化しないことを確認する。
+  const beforePreview = await node.locator('rect').first().getAttribute('x');
+  const actorCount = await page.locator('[data-actor-id]').count();
+  await page.getByRole('button', { name: '▶ プレビュー' }).click();
+  await page.getByRole('heading', { name: /プレビュー：/ }).waitFor();
+  await page.getByRole('button', { name: '編集画面に戻る' }).click();
+  await page.getByRole('heading', { name: '新規フロー作成' }).waitFor();
+  const afterPreview = await page.locator('[data-actor-id]').first().locator('rect').first().getAttribute('x');
+  if (beforePreview !== afterPreview) throw new Error('Node coordinates changed after preview round trip');
+  if (await page.locator('[data-actor-id]').count() !== actorCount) throw new Error('Actors changed after preview round trip');
   await page.getByRole('button', { name: '再生画面へ戻る' }).click();
   await page.getByRole('dialog', { name: '未保存の変更があります' }).waitFor();
   await page.getByRole('button', { name: '編集を続ける' }).click();
@@ -44,7 +54,7 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: 30% drag, viewport fit, unsaved changes, discard navigation');
+  console.log('PASS: 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
