@@ -411,6 +411,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_overwriting_existing_yaml_during_creation() {
+        let root = std::env::temp_dir().join(format!("bfe-create-existing-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        fs::write(&target, "metadata: original").unwrap();
+
+        assert!(create_yaml(&root, "scenario.yaml", "metadata: replaced").is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "metadata: original");
+        assert_eq!(list_yaml(&root).unwrap(), vec!["scenario.yaml"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
