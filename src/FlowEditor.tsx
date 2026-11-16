@@ -248,12 +248,39 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   return () => cancelAnimationFrame(frame);
  }, [zoom]);
  const activeActor = actors.find(actor => actor.id === selectedActor);
- // 初回は従来のキャンバス中心を表示する。以降はパン・ズーム状態を維持する。
+ // ノードの外接矩形を基準に表示中心と倍率を求める。負の座標も同様に扱う。
+ const fitActorsToViewport = () => {
+  const bounds = actors.map(actor => ({
+   left: actor.position.x,
+   top: actor.position.y,
+   right: actor.position.x + (actor.width ?? NODE_WIDTH),
+   bottom: actor.position.y + (actor.height ?? NODE_HEIGHT),
+  }));
+  if (!bounds.length) {
+   setZoom(1);
+   setOffset({ x: viewport.width / 2, y: viewport.height / 2 });
+   return;
+  }
+  const minX = Math.min(...bounds.map(item => item.left));
+  const maxX = Math.max(...bounds.map(item => item.right));
+  const minY = Math.min(...bounds.map(item => item.top));
+  const maxY = Math.max(...bounds.map(item => item.bottom));
+  const padding = 120;
+  const fit = Math.min(2.5, Math.max(.3, Math.min(
+   viewport.width / Math.max(1, maxX - minX + padding * 2),
+   viewport.height / Math.max(1, maxY - minY + padding * 2),
+  )));
+  setZoom(fit);
+  setOffset({
+   x: viewport.width / 2 - ((minX + maxX) / 2) * fit,
+   y: viewport.height / 2 - ((minY + maxY) / 2) * fit,
+  });
+ };
+ // 初回だけノード配置範囲の中心へ移動し、その後の手動パン・ズームは維持する。
  const viewInitialized = useRef(false);
  useEffect(() => {
-  if (viewInitialized.current) return;
-  if (viewport.width <= 1 || viewport.height <= 1) return;
-  setOffset({ x: viewport.width / 2 - WIDTH / 2, y: viewport.height / 2 - HEIGHT / 2 });
+  if (viewInitialized.current || viewport.width <= 1 || viewport.height <= 1) return;
+  fitActorsToViewport();
   viewInitialized.current = true;
  }, [viewport.width, viewport.height]);
  const activeStep = steps.find(step => step.id === selectedStep);
@@ -653,17 +680,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (!(event.target as Element).closest('.editor-context-menu')) setContextMenu(null);
  }}>
   <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button type="button" disabled={!canUndo} onClick={() => restoreHistory(-1)} title="Ctrl+Z">↶ 戻す</button><button type="button" disabled={!canRedo} onClick={() => restoreHistory(1)} title="Ctrl+Y">↷ やり直す</button><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
-  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={updateZoomAroundCenter} resetView={() => {
-   const xs = actors.map(a => a.position.x);
-   const ys = actors.map(a => a.position.y);
-   const minX = xs.length ? Math.min(...xs) - 160 : 0;
-   const maxX = xs.length ? Math.max(...xs) + 160 : WIDTH;
-   const minY = ys.length ? Math.min(...ys) - 120 : 0;
-   const maxY = ys.length ? Math.max(...ys) + 120 : HEIGHT;
-   const fit = Math.min(2.5, Math.max(.3, Math.min(viewport.width / Math.max(1, maxX - minX), viewport.height / Math.max(1, maxY - minY))));
-   setZoom(fit);
-   setOffset({ x: viewport.width / 2 - ((minX + maxX) / 2) * fit, y: viewport.height / 2 - ((minY + maxY) / 2) * fit });
-  }} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
+  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={updateZoomAroundCenter} resetView={() => { fitActorsToViewport();}} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
   {exitConfirmationOpen && <div className="editor-exit-backdrop" role="presentation">
    <div className="editor-exit-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-exit-title">
     <h3 id="editor-exit-title">未保存の変更があります</h3>
@@ -925,7 +942,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
      onRemoveWaypoints={removeWaypoints}
      waypointDirections={waypointMenuState(steps.find(step => step.id === contextMenu?.stepId))}
      onAddActor={() => { addActor(); setContextMenu(null); }}
-     onResetView={() => { setZoom(1); setOffset({ x: 0, y: 0 }); setContextMenu(null); }}/>
+     onResetView={() => { fitActorsToViewport(); setContextMenu(null); }}/>
    </EditorCanvas>
    <EditorPanel title="設定" className="editor-inspector" collapsed={inspectorCollapsed} onToggle={() => setInspectorCollapsed(value => !value)}>
     <>
