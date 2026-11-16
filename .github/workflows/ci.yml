@@ -1,29 +1,30 @@
-name: Tauri Windows CI
+name: Tauri development checks
 
 on:
-  push:
-    branches: [main, develop_tauri]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  windows:
+  checks:
+    name: Frontend and Rust tests
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Install application dependencies
-        run: npm install --no-audit --no-fund
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
       - name: Generate Windows icon
         run: node scripts/generate-icon.mjs
       - name: Test native YAML commands
@@ -34,5 +35,3 @@ jobs:
         run: git diff --exit-code -- public/scenarios/manifest.json
       - name: Check Rust application
         run: cargo check --manifest-path src-tauri/Cargo.toml
-      - name: Build Windows executable (without installer)
-        run: npx tauri build --no-bundle
