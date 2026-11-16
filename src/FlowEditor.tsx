@@ -703,7 +703,8 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       } else if (current.actorId) {
        const actor = actors.find(item => item.id === current.actorId);
        if (!actor) return;
-       const position = clampNodePosition(actor, { x: current.initial.x + dx, y: current.initial.y + dy }, { width: WIDTH, height: HEIGHT });
+       // ズーム倍率によってワールド端に衝突しないよう、ノード移動の固定境界を撤廃する。
+       const position = { x: current.initial.x + dx, y: current.initial.y + dy };
        changeActor(current.actorId, { position });
       } else {
        setOffset({ x: current.offset.x + dx, y: current.offset.y + dy });
