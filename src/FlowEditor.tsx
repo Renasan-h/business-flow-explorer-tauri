@@ -118,6 +118,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const beginHistoryDrag = (pointerId: number) => {
   historyDragStart.current = historyIndex.current;
   historyDragBaseline.current = currentHistory();
+  console.info('BFE_HISTORY_BEGIN', pointerId, historyDragStart.current, historyDragBaseline.current.actors[0]?.position.x);
   historyDragPointer.current = pointerId;
  };
  const finishHistoryDrag = (pointerId?: number) => {
@@ -127,6 +128,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (historyDragStart.current !== null && historyDragBaseline.current) {
    const before = historyDragBaseline.current;
    const after = currentHistory();
+   console.info('BFE_HISTORY_END', historyDragStart.current, before.actors[0]?.position.x, after.actors[0]?.position.x);
    history.current = history.current.slice(0, historyDragStart.current);
    history.current.push(before);
    if (JSON.stringify(before) !== JSON.stringify(after)) history.current.push(after);
