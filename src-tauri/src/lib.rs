@@ -116,9 +116,14 @@ fn create_yaml(root: &Path, relative: &str, content: &str) -> Result<(), String>
     if !parent.starts_with(root) { return Err("選択したディレクトリ外には保存できません".into()); }
     let name = path.file_name().ok_or("ファイル名が不正です")?;
     let target = parent.join(name);
-    let mut file = OpenOptions::new().write(true).create_new(true).open(target)
+    let mut file = OpenOptions::new().write(true).create_new(true).open(&target)
         .map_err(|error| format!("新規YAMLを作成できません: {error}"))?;
-    file.write_all(content.as_bytes()).map_err(|error| format!("YAMLを書き込めません: {error}"))
+    if let Err(error) = file.write_all(content.as_bytes()).and_then(|_| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(&target);
+        return Err(format!("YAMLを書き込めません: {error}"));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -156,6 +161,19 @@ mod tests {
             assert!(validate_relative_path(path).is_err(), "{path}");
         }
         assert!(validate_relative_path("nested/scenario.yaml").is_ok());
+    }
+
+    #[test]
+    fn creates_yaml_without_overwriting_existing_file() {
+        let root = std::env::temp_dir().join(format!("bfe-create-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("nested")).unwrap();
+        create_yaml(&root, "nested/new.yaml", "metadata: first").unwrap();
+        assert_eq!(fs::read_to_string(root.join("nested/new.yaml")).unwrap(), "metadata: first");
+        assert!(create_yaml(&root, "nested/new.yaml", "metadata: second").is_err());
+        assert_eq!(fs::read_to_string(root.join("nested/new.yaml")).unwrap(), "metadata: first");
+        assert!(create_yaml(&root, "../escape.yaml", "invalid").is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
