@@ -378,6 +378,25 @@ mod tests {
     }
 
     #[test]
+    fn rejects_directory_and_non_yaml_file_as_existing_scenario() {
+        let root = std::env::temp_dir().join(format!("bfe-existing-type-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("nested.yaml")).unwrap();
+        fs::write(root.join("notes.txt"), "private").unwrap();
+        fs::write(root.join("valid.YML"), "metadata: {}").unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+
+        assert!(resolve_existing(&canonical_root, "nested.yaml").is_err());
+        assert!(resolve_existing(&canonical_root, "notes.txt").is_err());
+        assert_eq!(
+            resolve_existing(&canonical_root, "valid.YML").unwrap(),
+            canonical_root.join("valid.YML")
+        );
+        assert_eq!(list_yaml(&canonical_root).unwrap(), vec!["valid.YML"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
