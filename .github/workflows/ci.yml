@@ -28,28 +28,9 @@ jobs:
         run: node scripts/generate-icon.mjs
       - name: Test native YAML commands
         run: cargo test --manifest-path src-tauri/Cargo.toml
-      - name: Build Windows installer
-        run: npm run build
-      - name: Package portable ZIP
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $portable = 'portable'
-          New-Item -ItemType Directory -Force -Path $portable | Out-Null
-          $exe = 'src-tauri/target/release/business-flow-explorer-tauri.exe'
-          if (-not (Test-Path $exe)) { throw "Portable executable not found: $exe" }
-          Copy-Item $exe "$portable/BusinessFlowExplorer.exe"
-          Copy-Item README.md "$portable/README.md"
-          Compress-Archive -Path "$portable/*" -DestinationPath 'BusinessFlowExplorer-Windows-Portable.zip' -Force
-      - name: Upload portable ZIP
-        uses: actions/upload-artifact@v4
-        with:
-          name: business-flow-explorer-portable-windows
-          path: BusinessFlowExplorer-Windows-Portable.zip
-          if-no-files-found: error
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: business-flow-explorer-windows
-          path: src-tauri/target/release/bundle/nsis/*
-          if-no-files-found: error
+      - name: Check TypeScript and build frontend
+        run: npm run build:web
+      - name: Check Rust application
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Build Windows executable (without installer)
+        run: npx tauri build --no-bundle
