@@ -306,7 +306,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  for (const reference of templateReferences) if (!inserted.has(reference.file)) { yamlSteps.push({ file: reference.file }); inserted.add(reference.file); }
  const yaml = stringify({ schemaVersion: '1.0', metadata, groups, interfaces, actors: yamlActors, steps: yamlSteps }, { lineWidth: 0 });
   // 既存編集では開いているシナリオのファイル名を優先する。新規作成だけmetadata.idを使用。
-  const filename = editorScenarioFilename(scenarioPath, metadata.id);
+  const filename = editorScenarioFilename(isNew ? undefined : scenarioPath, metadata.id);
   try {
    if (scenarioPath?.startsWith('/scenarios/native/')) {
     const relativePath = decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
