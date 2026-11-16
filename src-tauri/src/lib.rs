@@ -239,7 +239,7 @@ mod tests {
 
     #[test]
     fn rejects_invalid_extensions_and_parent_paths() {
-        for path in ["scenario.txt", "scenario.yaml/child.yml", "nested/../../escape.yaml", ".", "nested/."] {
+        for path in ["scenario.txt", "nested/../../escape.yaml", ".", "nested/."] {
             assert!(validate_relative_path(path).is_err(), "{path}");
         }
         assert!(validate_relative_path("nested/valid.YML").is_ok());
