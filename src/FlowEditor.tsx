@@ -347,11 +347,12 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   setTemplateCatalog([]);
   setTemplateCatalogStatus('templateフォルダを読み込み中…');
   const rootId = (scenarioPath ?? '').split('/')[2] || '0';
-  fetch('/scenarios/' + rootId + '/catalog.json', { cache: 'no-store' })
-   .then(response => {
-    if (!response.ok) throw new Error('テンプレート一覧の取得に失敗しました');
-    return response.json() as Promise<string[]>;
-   })
+  (rootId === 'native'
+   ? invoke<string[]>('list_scenario_files').then(files => files.filter(file => file.split('/').includes('template')).map(file => '/scenarios/native/' + file.split('/').map(encodeURIComponent).join('/')))
+   : fetch('/scenarios/' + rootId + '/catalog.json', { cache: 'no-store' }).then(response => {
+      if (!response.ok) throw new Error('テンプレート一覧の取得に失敗しました');
+      return response.json() as Promise<string[]>;
+     }))
    .then(paths => {
     if (cancelled) return;
     const base = scenarioPath ? new URL(scenarioPath, window.location.origin) : new URL('/scenarios/' + rootId + '/new-flow.yaml', window.location.origin);
@@ -395,7 +396,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
     if (!/^[^?#\\\\]+\.ya?ml$/i.test(path) || path.startsWith('/') || path.split('/').includes('') || path.split('/').includes('.')) throw new Error('シナリオルート内の相対YAMLパスを指定してください');
     const base = scenarioPath ? new URL(scenarioPath, window.location.origin) : new URL('/scenarios/new-flow.yaml', window.location.origin);
     const url = new URL(path, base);
-    if (url.origin !== window.location.origin || !url.pathname.startsWith('/scenarios/')) throw new Error('scenarios外のファイルは読み込めません');
+    if (url.origin !== window.location.origin || !url.pathname.startsWith('/scenarios/' + (scenarioPath?.split('/')[2] || '0') + '/')) throw new Error('選択中のシナリオフォルダ外のファイルは読み込めません');
     if (url.pathname.startsWith('/scenarios/native/')) {
      content = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(url.pathname.slice('/scenarios/native/'.length)) });
     } else {
