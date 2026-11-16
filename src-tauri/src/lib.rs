@@ -3,6 +3,9 @@ use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
+// 同一プロセス内の保存操作を直列化し、バックアップ名の競合を防止する。
+static YAML_SAVE_LOCK: Mutex<()> = Mutex::new(());
+
 use tauri::State;
 use tauri_plugin_dialog::DialogExt;
 
@@ -112,6 +115,7 @@ fn write_scenario_file(
 // Windowsではrenameによる既存ファイルの置き換えが失敗する環境もあるため、
 // 元ファイルを退避してから切り替え、失敗した場合は復元する。
 fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
+    let _guard = YAML_SAVE_LOCK.lock().map_err(|_| "保存処理のロックを取得できません".to_string())?;
     let parent = target.parent().ok_or("保存先が不正です")?;
     let name = target.file_name().ok_or("ファイル名が不正です")?.to_string_lossy();
     let mut index = 0u32;
@@ -270,6 +274,33 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         assert!(create_yaml(&root, "missing/new.yaml", "data").is_err());
         assert!(!root.join("missing/new.yaml").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn concurrent_saves_keep_complete_yaml_and_remove_temporary_files() {
+        let root = std::env::temp_dir().join(format!("bfe-concurrent-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        fs::write(&target, "initial").unwrap();
+        let gate = std::sync::Arc::new(std::sync::Barrier::new(4));
+        let mut threads = Vec::new();
+        for index in 0..4 {
+            let target = target.clone();
+            let gate = gate.clone();
+            threads.push(std::thread::spawn(move || {
+                let content = format!("metadata: writer-{index}\\n{}", "a".repeat(4096));
+                gate.wait();
+                replace_yaml(&target, &content).unwrap();
+                content
+            }));
+        }
+        let expected: Vec<String> = threads.into_iter().map(|thread| thread.join().unwrap()).collect();
+        let actual = fs::read_to_string(&target).unwrap();
+        assert!(expected.contains(&actual), "保存内容が途中で破損しています");
+        let files: Vec<_> = fs::read_dir(&root).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+        assert_eq!(files.len(), 1, "一時ファイルまたはバックアップが残っています");
         fs::remove_dir_all(root).unwrap();
     }
 
