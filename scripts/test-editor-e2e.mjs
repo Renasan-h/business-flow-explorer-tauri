@@ -18,6 +18,12 @@ try {
   await page.goto('http://127.0.0.1:4179/');
   await page.getByRole('button', { name: /新規/ }).first().click();
   await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  // Undo/Redo はノード追加を戻し、やり直しで同じノードを復元する。
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Expected one newly created actor');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Ctrl+Z did not undo actor creation');
+  await page.keyboard.press('Control+y');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Ctrl+Y did not redo actor creation');
   const node = page.locator('[data-actor-id]').first();
   await node.waitFor();
   for (let i = 0; i < 8; i++) await page.getByRole('button', { name: '−', exact: true }).click();
@@ -54,7 +60,7 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
