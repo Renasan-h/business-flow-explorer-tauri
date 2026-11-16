@@ -43,7 +43,11 @@ const png = Buffer.concat([
   chunk('IDAT', deflateSync(pixels)),
   chunk('IEND', Buffer.alloc(0)),
 ]);
+// ICO形式: 6バイトのICONDIR + 16バイトのICONDIRENTRY。
+// 先頭の予約領域(0-1)は0、種別(2-3)が1、画像数(4-5)が1。
 const header = Buffer.alloc(22);
+header.writeUInt16LE(0, 0);
+header.writeUInt16LE(1, 2);
 header.writeUInt16LE(1, 4);
 header[6] = size;
 header[7] = size;
