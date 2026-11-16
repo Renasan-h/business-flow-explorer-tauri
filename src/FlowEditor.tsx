@@ -81,20 +81,20 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const [offset, setOffset] = useState({ x: 0, y: 0 });
  const [message, setMessage] = useState('');
  const [preview, setPreview] = useState(false);
+ const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
  // データ変更だけを追跡し、ズームや選択操作は未保存扱いしない。
  // 編集中の実データを基準に初期スナップショットを作る。
  // initial と編集用stateで配列の正規化状態が異なる場合も誤検知しない。
  const snapshot = () => JSON.stringify({ actors, steps, metadata, groups, interfaces, templateReferences });
  const savedSnapshot = useRef<string | null>(null);
  if (savedSnapshot.current === null) savedSnapshot.current = snapshot();
- // 保存・破棄・キャンセルを順に確認する。保存が失敗・中断された場合は編集画面に留まる。
- const requestExit = async () => {
+ // 未保存時はネイティブconfirmではなく画面内で3択を明示する。
+ const requestExit = () => {
   if (snapshot() === savedSnapshot.current) { onClose(); return; }
-  if (window.confirm('未保存の変更があります。保存してから再生画面へ戻りますか？')) {
-   if (await save()) onClose();
-   return;
-  }
-  if (window.confirm('変更を保存せずに破棄して戻りますか？\nキャンセルすると編集を続けられます。')) onClose();
+  setExitConfirmationOpen(true);
+ };
+ const saveAndExit = async () => {
+  if (await save()) { setExitConfirmationOpen(false); onClose(); }
  };
  // 右クリックした場所に応じてメニューを切り替える。座標はエディター内のCSSピクセル。
  const [contextMenu, setContextMenu] = useState<EditorContextMenuState | null>(null);
@@ -516,6 +516,17 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  }}>
   <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
   <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={setZoom} resetView={() => { setOffset({ x: 0, y: 0 }); const canvas = canvasRef.current; if (canvas) { canvas.scrollLeft = (canvas.scrollWidth - canvas.clientWidth) / 2; canvas.scrollTop = (canvas.scrollHeight - canvas.clientHeight) / 2; } }} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
+  {exitConfirmationOpen && <div className="editor-exit-backdrop" role="presentation">
+   <div className="editor-exit-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-exit-title">
+    <h3 id="editor-exit-title">未保存の変更があります</h3>
+    <p>編集内容を保存してから戻るか、変更を破棄して再生画面へ戻るか選択してください。</p>
+    <div className="editor-exit-actions">
+     <button type="button" className="selected" onClick={() => void saveAndExit()}>保存して戻る</button>
+     <button type="button" onClick={() => { setExitConfirmationOpen(false); onClose(); }}>保存せず戻る</button>
+     <button type="button" onClick={() => setExitConfirmationOpen(false)}>編集を続ける</button>
+    </div>
+   </div>
+  </div>}
   {templateImportOpen && <TemplateImportDialog path={templatePath} file={templateFile} error={templateError} onPathChange={setTemplatePath} onFileChange={setTemplateFile} onClose={closeTemplateImport} onImport={mode => void importTemplate(mode)} catalog={templateCatalog} catalogStatus={templateCatalogStatus}/>}
   {interfacePanel && <InterfaceDefinitionDialog interfaceId={interfacePanel} interfaces={interfaces} setInterfaces={setInterfaces} onClose={() => setInterfacePanel(null)} onImportFields={importInterfaceFields}/>}
   <div className={`editor-layout${inspectorCollapsed ? " inspector-collapsed" : ""}${orderCollapsed ? " order-collapsed" : ""}`}>
