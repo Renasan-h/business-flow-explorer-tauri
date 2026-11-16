@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { branchGroups, playbackActors, playbackSteps } from './branchPlayback';
 import { useEffect, useState } from 'react';
 import FlowEditor from './FlowEditor';
@@ -25,6 +26,18 @@ export default function App() {
  const [scenarioReload, setScenarioReload] = useState(0);
  const [scenarioRoots, setScenarioRoots] = useState<{ id: string; label: string }[]>([]);
  const [activeRoot, setActiveRoot] = useState('0');
+ const [nativeFolder, setNativeFolder] = useState<string | null>(null);
+ const selectNativeFolder = async () => {
+  try {
+   const selected = await invoke<string | null>('select_scenario_folder');
+   if (!selected) return;
+   setNativeFolder(selected);
+   setActiveRoot('native');
+   setSelected('');
+   setScenario(null);
+   setScenarioReload(value => value + 1);
+  } catch (error) { setError('フォルダを選択できませんでした: ' + String(error)); }
+ };
  // 狭い描画領域ではシナリオ一覧を左側のオーバーレイとして開く。
  const [scenarioMenuOpen, setScenarioMenuOpen] = useState(false);
  const [scenarioTitles, setScenarioTitles] = useState<Record<string, string>>({});
@@ -62,7 +75,7 @@ export default function App() {
  // シナリオ一覧の表示名はファイル名ではなく、各YAMLの必須項目metadata.titleから取得する。
  useEffect(() => {
   let cancelled = false;
-  Promise.all([fetch('/scenario-roots.json').then(response => { if (!response.ok) throw new Error('ベースディレクトリの取得に失敗しました'); return response.json() as Promise<{ id: string; label: string }[]>; }), listScenarios(activeRoot)])
+  Promise.all([Promise.resolve([{ id: '0', label: '同梱シナリオ' }, ...(nativeFolder ? [{ id: 'native', label: nativeFolder }] : [])]), listScenarios(activeRoot)])
    .then(async ([roots, paths]) => {
     setScenarioRoots(roots);
     const scenarios = await Promise.all(paths.map(path => loadScenario(path)));
@@ -74,7 +87,7 @@ export default function App() {
    })
    .catch(error => { if (!cancelled) setError(String(error)); });
   return () => { cancelled = true; };
- }, [scenarioReload, activeRoot]);
+ }, [scenarioReload, activeRoot, nativeFolder]);
  useEffect(() => { if (!selected) return; setSelectedActorId(null); setSelectedInterfaceId(null); setPlaying(false); setFinished(false); setStep(0); setBranchChoices({}); loadScenario(selected).then(s => { setScenario(s); setError(''); }).catch(e => setError(String(e))); }, [selected, scenarioReload]);
  // 最終ステップの完了時は停止し、再生ボタンを押すまで先頭へ戻さない。
  const [finished, setFinished] = useState(false);
@@ -147,6 +160,7 @@ export default function App() {
  }
  if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} initial={scenario} scenarioPath={selected} onClose={() => setEditorMode('none')} />;
  return <div className="app">
+  <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()}>📁 ローカルのシナリオフォルダを開く</button></div>
   <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>
   <div className="layout">
    <ScenarioSidebar open={scenarioMenuOpen} paths={paths} titles={scenarioTitles} categories={scenarioCategories} selected={selected}
