@@ -499,6 +499,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   setOrderSource(null);
  };
  const isNew = initial.actors.length === 0 && initial.steps.length === 0;
+ const nativeCreatedPath = useRef<string | null>(null);
  useEffect(() => { setMessage(''); }, [tool]);
  // プレビューに編集中の状態を渡す。戻っても編集中の変更は保持される。
  if (preview) return <FlowPreview actors={actors} steps={steps} interfaces={interfaces} title={metadata.title} onDeleteStep={deleteStep} onExit={requestExit} onClose={() => setPreview(false)}/>;
