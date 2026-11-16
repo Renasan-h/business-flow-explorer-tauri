@@ -425,6 +425,50 @@ mod tests {
     }
 
     #[test]
+    fn native_yaml_round_trip_create_list_read_update() {
+        let base = std::env::temp_dir().join(format!("bfe-roundtrip-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("scenarios");
+        fs::create_dir_all(root.join("nested")).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+        let relative = "nested/registration.yaml";
+        let initial = "metadata:\\n  title: 会員登録\\nactors: []\\nsteps: []\\n";
+        let edited = "metadata:\\n  title: 会員登録（更新）\\nactors: []\\nsteps: []\\n";
+
+        create_yaml(&canonical_root, relative, initial).unwrap();
+        assert_eq!(list_yaml(&canonical_root).unwrap(), vec![relative]);
+        let target = resolve_existing(&canonical_root, relative).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), initial);
+
+        replace_yaml(&target, edited).unwrap();
+        assert_eq!(fs::read_to_string(resolve_existing(&canonical_root, relative).unwrap()).unwrap(), edited);
+        assert_eq!(list_yaml(&canonical_root).unwrap(), vec![relative]);
+        assert!(create_yaml(&canonical_root, relative, initial).is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), edited);
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
+    fn failed_update_preserves_original_and_cleans_temp_files() {
+        let root = std::env::temp_dir().join(format!("bfe-save-failure-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        let backup = root.join(format!(".scenario.yaml.{}.backup", std::process::id()));
+        fs::write(&target, "metadata: original").unwrap();
+        fs::write(&backup, "conflict").unwrap();
+
+        assert!(replace_yaml(&target, "metadata: overwritten").is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "metadata: original");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "conflict");
+        assert_eq!(list_yaml(&root).unwrap(), vec!["scenario.yaml"]);
+        let temporary_count = fs::read_dir(&root).unwrap().filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
+        assert_eq!(temporary_count, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
