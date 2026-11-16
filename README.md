@@ -4,11 +4,11 @@
 
 ## 構成
 
-- `web/`：Web版の作業コピー（`npm run setup:web` で初回取得、Git管理対象外）
+- `src/`：Web版から取り込んだReactソース（Tauri版で独立管理）
 - `src-tauri/`：Tauri 2 / Rustアプリ
 - `.github/workflows/ci.yml`：Windowsインストーラーのビルド検証
 
-Web版のソースはこのリポジトリへ複製して管理せず、セットアップ時にGitHubから取得します。既存の`web/`は自動更新しません。Web版を更新する場合は、変更を退避したうえで`web/`内で明示的に`git pull`してください。
+Web版のソースはTauri版に取り込み、別リポジトリとして独立管理します。
 
 ## 開発環境
 
@@ -18,7 +18,6 @@ Windows 11、Node.js 22、Rust stable、Microsoft C++ Build Tools（Desktop deve
 git clone https://github.com/Renasan-h/business-flow-explorer-tauri.git
 cd business-flow-explorer-tauri
 npm install
-npm run setup:web
 npm run dev
 ```
 
@@ -32,7 +31,7 @@ npm run build
 
 ## 開発方針と現状
 
-初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルの任意フォルダ参照、ファイルの直接上書き保存、設定永続化などのデスクトップ専用機能は**未実装**です。Web版のブラウザ制約がそのまま残る操作もあります。
+初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルフォルダ操作のRustコマンドは実装中ですが、React画面との接続・動作確認は未完了です。Web版のブラウザ制約がそのまま残る操作もあります。
 
 今後はTauriのファイルダイアログ・ファイルシステム権限を最小限に設定し、Web版とデスクトップ版の保存処理を分離します。Web版のリポジトリは変更しません。
 
