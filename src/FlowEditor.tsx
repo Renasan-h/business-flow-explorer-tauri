@@ -81,6 +81,13 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const [offset, setOffset] = useState({ x: 0, y: 0 });
  const [preview, setPreview] = useState(false);
  const [viewport, setViewport] = useState({ width: 1100, height: 650 });
+ const updateZoomAroundCenter = (update: (value: number) => number) => {
+  const next = update(zoom);
+  const center = { x: viewport.width / 2, y: viewport.height / 2 };
+  const world = { x: (center.x - offset.x) / zoom, y: (center.y - offset.y) / zoom };
+  setZoom(next);
+  setOffset({ x: center.x - world.x * next, y: center.y - world.y * next });
+ };
  // SVGの表示サイズをキャンバスの実寸に同期し、固定3600x1800のスクロール面を使わない。
  useEffect(() => {
   const canvas = canvasRef.current;
@@ -564,7 +571,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (!(event.target as Element).closest('.editor-context-menu')) setContextMenu(null);
  }}>
   <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
-  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={setZoom} resetView={() => {
+  <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={updateZoomAroundCenter} resetView={() => {
    const xs = actors.map(a => a.position.x);
    const ys = actors.map(a => a.position.y);
    const minX = xs.length ? Math.min(...xs) - 160 : 0;
