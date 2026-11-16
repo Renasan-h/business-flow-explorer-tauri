@@ -113,19 +113,27 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  // ポインタ操作中の中間座標は履歴に積まず、終了時の確定状態だけを記録する。
  const historyDragPointer = useRef<number | null>(null);
  const historyDragStart = useRef<number | null>(null);
+ const historyDragBaseline = useRef<EditorHistory | null>(null);
  const [historyDragRevision, setHistoryDragRevision] = useState(0);
  const beginHistoryDrag = (pointerId: number) => {
   historyDragStart.current = historyIndex.current;
+  historyDragBaseline.current = currentHistory();
   historyDragPointer.current = pointerId;
  };
  const finishHistoryDrag = (pointerId?: number) => {
   if (historyDragPointer.current === null || (pointerId !== undefined && historyDragPointer.current !== pointerId)) return;
   historyDragPointer.current = null;
   // ドラッグ中に発生した履歴を破棄し、確定状態を1件だけ追加する。
-  if (historyDragStart.current !== null) {
-   history.current = history.current.slice(0, historyDragStart.current + 1);
+  if (historyDragStart.current !== null && historyDragBaseline.current) {
+   const before = historyDragBaseline.current;
+   const after = currentHistory();
+   history.current = history.current.slice(0, historyDragStart.current);
+   history.current.push(before);
+   if (JSON.stringify(before) !== JSON.stringify(after)) history.current.push(after);
+   if (history.current.length > 100) history.current = history.current.slice(-100);
    historyIndex.current = history.current.length - 1;
    historyDragStart.current = null;
+   historyDragBaseline.current = null;
   }
   setHistoryDragRevision(value => value + 1);
  };
