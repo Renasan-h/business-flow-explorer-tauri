@@ -217,20 +217,20 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
     const px = axis(pointer.x, rect.left, rect.right);
     const py = axis(pointer.y, rect.top, rect.bottom);
     if (px || py) {
-     setOffset(previous => ({ x: previous.x + px, y: previous.y + py }));
+     setOffset(previous => edgePointer.current?.id === pointer.id ? { x: previous.x + px, y: previous.y + py } : previous);
      const worldDx = -px / zoom;
      const worldDy = -py / zoom;
      const single = drag.current;
      const multiple = multiDrag.current;
      if (single?.id === pointer.id && single.actorId && !single.resizeActor) {
       single.initial = { x: single.initial.x + worldDx, y: single.initial.y + worldDy };
-      setActors(items => items.map(actor => actor.id === single.actorId
-       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor));
+      setActors(items => edgePointer.current?.id === pointer.id ? items.map(actor => actor.id === single.actorId
+       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor) : items);
      } else if (multiple?.pointerId === pointer.id) {
       multiple.initial = multiple.initial.map(item => ({ ...item, x: item.x + worldDx, y: item.y + worldDy }));
       const selected = new Set(multiple.initial.map(item => item.id));
-      setActors(items => items.map(actor => selected.has(actor.id)
-       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor));
+      setActors(items => edgePointer.current?.id === pointer.id ? items.map(actor => selected.has(actor.id)
+       ? { ...actor, position: { x: actor.position.x + worldDx, y: actor.position.y + worldDy } } : actor) : items);
      }
     }
    }
