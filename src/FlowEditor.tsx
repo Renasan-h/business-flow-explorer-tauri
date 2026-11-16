@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { useEffect, useRef, useState } from 'react';
 import { parse, stringify } from 'yaml';
 import { loadTemplateFragment, parseTemplateYaml, type Scenario } from './scenario';
@@ -307,6 +308,13 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   // 既存編集では開いているシナリオのファイル名を優先する。新規作成だけmetadata.idを使用。
   const filename = editorScenarioFilename(scenarioPath, metadata.id);
   try {
+   if (scenarioPath?.startsWith('/scenarios/native/')) {
+    const relativePath = decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
+    await invoke('write_scenario_file', { relativePath, content: yaml });
+    savedSnapshot.current = snapshotAtSave;
+    setMessage('選択したフォルダのYAMLを上書き保存しました。');
+    return true;
+   }
    const picker = (window as Window & FilePicker).showSaveFilePicker;
    if (picker) {
     const handle = await picker({ suggestedName: filename, types: [{ description: 'YAML scenario', accept: { 'application/x-yaml': ['.yaml', '.yml'] } }] });
