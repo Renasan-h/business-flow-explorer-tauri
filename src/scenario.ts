@@ -229,7 +229,7 @@ export async function listScenarios(rootId = '0'): Promise<string[]> {
  if (rootId === 'native') {
   const files = await invoke<string[]>('list_scenario_files');
   // 断片ファイルは一覧から除外し、親シナリオだけを表示する。
-  const parents = await Promise.all(files.map(async file => {
+  const parents = await Promise.all(files.filter(file => !file.split('/').includes('template')).map(async file => {
    try {
     const yaml = await invoke<string>('read_scenario_file', { relativePath: file });
     const data: unknown = parse(yaml);
