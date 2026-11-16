@@ -22,10 +22,8 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-      - name: Install wrapper dependencies
+      - name: Install application dependencies
         run: npm install --no-audit --no-fund
-      - name: Prepare Web frontend
-        run: npm run setup:web
       - name: Test native YAML commands
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build Windows installer
