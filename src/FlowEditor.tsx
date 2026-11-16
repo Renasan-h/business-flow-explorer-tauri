@@ -396,9 +396,13 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
     const base = scenarioPath ? new URL(scenarioPath, window.location.origin) : new URL('/scenarios/new-flow.yaml', window.location.origin);
     const url = new URL(path, base);
     if (url.origin !== window.location.origin || !url.pathname.startsWith('/scenarios/')) throw new Error('scenarios外のファイルは読み込めません');
-    const response = await fetch(url.pathname);
-    if (!response.ok) throw new Error('テンプレートを取得できません: ' + response.status);
-    content = await response.text();
+    if (url.pathname.startsWith('/scenarios/native/')) {
+     content = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(url.pathname.slice('/scenarios/native/'.length)) });
+    } else {
+     const response = await fetch(url.pathname.replace(/^\/scenarios\/0\//, '/scenarios/'));
+     if (!response.ok) throw new Error('テンプレートを取得できません: ' + response.status);
+     content = await response.text();
+    }
     sourceUrl = url.href;
    }
    const parsedFragment = parseTemplateYaml(content);
