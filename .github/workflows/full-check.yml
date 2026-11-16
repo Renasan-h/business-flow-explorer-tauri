@@ -40,6 +40,12 @@ jobs:
       - name: Check frontend build (main wrapper)
         if: github.ref == 'refs/heads/main'
         run: npm --prefix web run build
+      - name: Install browser test runner
+        run: npm install --no-save --package-lock=false playwright
+      - name: Install Chromium for browser tests
+        run: npx playwright install chromium
+      - name: Verify editor interactions in Chromium
+        run: node scripts/test-editor-e2e.mjs
       - name: Generate Windows icon
         run: node scripts/generate-icon.mjs
       - name: Rust unit tests
