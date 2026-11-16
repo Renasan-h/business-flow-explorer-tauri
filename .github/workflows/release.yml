@@ -1,0 +1,71 @@
+name: Tauri Windows release build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: 'Release tag or main commit SHA (must belong to main)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows-release:
+    name: Windows installer and portable ZIP
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout release revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+          fetch-depth: 0
+      - name: Ensure release revision is on main
+        shell: bash
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main || { echo "Release revision is not in main"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Generate Windows icon
+        run: node scripts/generate-icon.mjs
+      - name: Test native YAML commands
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Check TypeScript and build frontend
+        run: npm run build:web
+      - name: Verify generated scenario manifest is committed
+        run: git diff --exit-code -- public/scenarios/manifest.json
+      - name: Build Windows installer
+        run: npm run build
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-windows
+          path: src-tauri/target/release/bundle/nsis/*
+          if-no-files-found: error
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'src-tauri/target/release/business-flow-explorer-tauri.exe'
+          if (-not (Test-Path $exe)) { throw "Portable executable not found: $exe" }
+          New-Item -ItemType Directory -Force -Path 'dist/portable' | Out-Null
+          Copy-Item $exe 'dist/portable/Business Flow Explorer.exe'
+          Compress-Archive -Path 'dist/portable/Business Flow Explorer.exe' -DestinationPath 'dist/BusinessFlowExplorer-portable-windows-x64.zip' -Force
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-portable-windows-x64
+          path: dist/BusinessFlowExplorer-portable-windows-x64.zip
+          if-no-files-found: error
