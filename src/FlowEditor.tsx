@@ -110,6 +110,15 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  // 編集データ全体を履歴化する。選択状態・ズーム・パンは履歴に含めない。
  type EditorHistory = { actors: Actor[]; steps: Step[]; metadata: typeof metadata; groups: typeof groups; interfaces: typeof interfaces; templateReferences: typeof templateReferences };
  const history = useRef<EditorHistory[]>([]);
+ // ポインタ操作中の中間座標は履歴に積まず、終了時の確定状態だけを記録する。
+ const historyDragPointer = useRef<number | null>(null);
+ const [historyDragRevision, setHistoryDragRevision] = useState(0);
+ const beginHistoryDrag = (pointerId: number) => { historyDragPointer.current = pointerId; };
+ const finishHistoryDrag = (pointerId?: number) => {
+  if (historyDragPointer.current === null || (pointerId !== undefined && historyDragPointer.current !== pointerId)) return;
+  historyDragPointer.current = null;
+  setHistoryDragRevision(value => value + 1);
+ };
  const historyIndex = useRef(-1);
  const restoringHistory = useRef(false);
  const [historyRevision, setHistoryRevision] = useState(0);
@@ -117,6 +126,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const historyKey = snapshot();
  useLayoutEffect(() => {
   if (restoringHistory.current) { restoringHistory.current = false; return; }
+  if (historyDragPointer.current !== null) return;
   const previous = history.current[historyIndex.current];
   if (previous && JSON.stringify(previous) === historyKey) return;
   history.current = history.current.slice(0, historyIndex.current + 1);
@@ -125,7 +135,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (history.current.length > 100) history.current.shift();
   historyIndex.current = history.current.length - 1;
   setHistoryRevision(value => value + 1);
- }, [historyKey]);
+ }, [historyKey, historyDragRevision]);
  const restoreHistory = (direction: -1 | 1) => {
   const index = historyIndex.current + direction;
   if (index < 0 || index >= history.current.length) return;
