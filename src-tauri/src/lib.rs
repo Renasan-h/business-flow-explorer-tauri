@@ -337,6 +337,35 @@ mod tests {
     }
 
     #[test]
+    fn rejects_symlinked_yaml_file_outside_selected_root() {
+        let base = std::env::temp_dir().join(format!("bfe-file-link-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("selected");
+        fs::create_dir_all(&root).unwrap();
+        let external = base.join("private.yaml");
+        fs::write(&external, "private").unwrap();
+        let linked = root.join("linked.yaml");
+        // Windowsでは開発者モードまたはシンボリックリンク権限が必要な場合がある。
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&external, &linked);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_file(&external, &linked);
+        if let Err(error) = link_result {
+            #[cfg(windows)]
+            if error.kind() == std::io::ErrorKind::PermissionDenied {
+                fs::remove_dir_all(base).unwrap();
+                return;
+            }
+            panic!("シンボリックリンクを作成できません: {error}");
+        }
+        let canonical_root = root.canonicalize().unwrap();
+        assert!(list_yaml(&canonical_root).unwrap().is_empty());
+        assert!(resolve_existing(&canonical_root, "linked.yaml").is_err());
+        assert_eq!(fs::read_to_string(&external).unwrap(), "private");
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
