@@ -305,6 +305,38 @@ mod tests {
     }
 
     #[test]
+    fn rejects_existing_yaml_outside_selected_root() {
+        let base = std::env::temp_dir().join(format!("bfe-boundary-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("selected");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(base.join("outside.yaml"), "private").unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+        assert!(resolve_existing(&canonical_root, "../outside.yaml").is_err());
+        assert!(resolve_existing(&canonical_root, "outside.txt").is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_symlinked_directories_and_rejects_external_yaml() {
+        use std::os::unix::fs::symlink;
+        let base = std::env::temp_dir().join(format!("bfe-symlink-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("selected");
+        let external = base.join("external");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&external).unwrap();
+        fs::write(external.join("secret.yaml"), "private").unwrap();
+        symlink(&external, root.join("linked")).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+        assert!(list_yaml(&canonical_root).unwrap().is_empty());
+        assert!(resolve_existing(&canonical_root, "linked/secret.yaml").is_err());
+        assert!(create_yaml(&canonical_root, "linked/new.yaml", "private").is_err());
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
