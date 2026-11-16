@@ -114,7 +114,7 @@ function mergeActor(existing: Actor, incoming: Actor): Actor {
 }
 
 /** YAMLのファイル参照を再帰的に展開し、ancestorsで循環参照を検知する。 */
-async function readFragments(path: string, ancestors: Set<string>): Promise<{
+async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: string): Promise<{
  actors: Actor[];
  steps: Step[];
  root?: ScenarioData;
@@ -125,6 +125,11 @@ async function readFragments(path: string, ancestors: Set<string>): Promise<{
   throw new Error('参照先は /scenarios/ 内のファイルに限定されます: ' + path);
  }
  const canonical = url.pathname;
+ // ローカルシナリオの参照が同梱リソースへ逸脱しないよう、初回のルートを維持する。
+ const expectedRoot = rootPrefix ?? (canonical.startsWith('/scenarios/native/') ? '/scenarios/native/' : '/scenarios/0/');
+ if (!canonical.startsWith(expectedRoot)) {
+  throw new Error('シナリオの参照先が選択中のルート外です: ' + canonical);
+ }
  if (ancestors.has(canonical)) throw new Error('シナリオの循環参照: ' + [...ancestors, canonical].join(' → '));
  const nextAncestors = new Set([...ancestors, canonical]);
  const relative = canonical.startsWith('/scenarios/native/') ? canonical.slice('/scenarios/native/'.length) : null;
@@ -154,7 +159,7 @@ async function readFragments(path: string, ancestors: Set<string>): Promise<{
  // 共通Actorファイルにはステップを含めない。
  for (const actorFile of data.actorFiles ?? []) {
   const resolved = new URL(actorFile, url);
-  const fragment = await readFragments(resolved.href, nextAncestors);
+  const fragment = await readFragments(resolved.href, nextAncestors, expectedRoot);
   if (fragment.root || fragment.steps.length > 0) {
    throw new Error('actorFilesにはactorsのみを定義してください: ' + actorFile);
   }
@@ -163,7 +168,7 @@ async function readFragments(path: string, ancestors: Set<string>): Promise<{
  // actors配列に記述された順番でActor定義と外部ファイルを展開する。
  for (const entry of data.actors ?? []) {
   if ('file' in entry) {
-   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors);
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot);
    if (fragment.root || fragment.steps.length > 0) {
     throw new Error('actors内のfileにはActor定義のみを指定してください: ' + entry.file);
    }
@@ -175,7 +180,7 @@ async function readFragments(path: string, ancestors: Set<string>): Promise<{
  // stepsの配列順に通常ステップとサブシナリオを展開する。
  for (const entry of data.steps ?? []) {
   if ('file' in entry) {
-   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors);
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot);
    if (!fragment.root) throw new Error('サブシナリオにはschemaVersionとmetadataが必要です: ' + entry.file);
    fragment.actors.forEach(addActor);
    // ファイル境界の通信を明示した場合は、通常ステップとして挿入する。
