@@ -34,3 +34,20 @@ jobs:
           name: business-flow-explorer-windows
           path: src-tauri/target/release/bundle/nsis/*
           if-no-files-found: error
+
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'src-tauri/target/release/business-flow-explorer-tauri.exe'
+          if (-not (Test-Path $exe)) { throw "Portable executable not found: $exe" }
+          New-Item -ItemType Directory -Force -Path 'dist/portable' | Out-Null
+          Copy-Item $exe 'dist/portable/Business Flow Explorer.exe'
+          Compress-Archive -Path 'dist/portable/Business Flow Explorer.exe' -DestinationPath 'dist/BusinessFlowExplorer-portable-windows-x64.zip' -Force
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-portable-windows-x64
+          path: dist/BusinessFlowExplorer-portable-windows-x64.zip
+          if-no-files-found: error
