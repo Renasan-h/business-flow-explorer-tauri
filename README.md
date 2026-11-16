@@ -6,7 +6,9 @@
 
 - `src/`：Web版から取り込んだReactソース（Tauri版で独立管理）
 - `src-tauri/`：Tauri 2 / Rustアプリ
-- `.github/workflows/ci.yml`：開発用チェック（TypeScript/Webビルド、Rustテスト・check）
+- `.github/workflows/frontend-check.yml`：TypeScriptとWebビルドの検証
+- `.github/workflows/rust-test.yml`：Rustユニットテスト
+- `.github/workflows/rust-check.yml`：Rustコンパイル検証
 - `.github/workflows/release.yml`：リリース時のみ実行するWindowsインストーラー・Portable ZIP生成
 
 Web版のソースはTauri版に取り込み、別リポジトリとして独立管理します。
@@ -32,9 +34,9 @@ npm run build
 
 ## CI運用
 
-- 開発用の `Tauri development checks` は `main` 向けPull Request時、またはActions画面からの手動実行時のみ動作します。ブランチへのpushだけでは起動しません。
-- 開発中に手動でテストしたい場合は、Actionsの `Tauri development checks` → `Run workflow` から `develop_tauri` または作業ブランチを選択して実行します。
-- 開発用CIでは `cargo test`、`cargo check`、Webビルド検証を行います。TauriインストーラーやZIPは生成しません。
+- 開発用の `Frontend checks`、`Rust unit tests`、`Rust compile check` は、変更されたファイルに応じて `main` 向けPull Request時に実行されます。ブランチへのpushだけでは起動しません。
+- 開発中に手動でテストしたい場合は、Actionsから目的のワークフローを選び、`Run workflow` で `develop_tauri` または作業ブランチを指定して実行します。
+- 目的別CIではフロントエンド検証、`cargo test`、`cargo check` を個別に実行します。Rust側の検証でもTauriのビルドスクリプト用にWebの `dist` を事前生成しますが、インストーラーやZIPは生成しません。
 - リリース時は変更をPull Requestで `main` に取り込み、`main` に `.github/workflows/release.yml` が反映された後、Actionsの `Tauri Windows release build` で `main` を選択して実行します。
 - リリースワークフローの `release_ref` には `main` に含まれるコミットSHAまたはタグを指定します。開発ブランチ上のコミットを直接リリースすることはできません。
 - リリース生成物のArtifactは `business-flow-explorer-windows`（NSIS）と `business-flow-explorer-portable-windows-x64`（Portable ZIP）です。Portable ZIPはインストール不要ですが、設定やデータを実行フォルダー内に保存する完全ポータブル仕様は保証していません。
