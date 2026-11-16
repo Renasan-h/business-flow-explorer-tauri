@@ -1,0 +1,27 @@
+name: Rust unit tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src-tauri/**'
+      - '.github/workflows/rust-test.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rust-tests:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Generate Windows icon
+        run: node scripts/generate-icon.mjs
+      - name: Rust unit tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
