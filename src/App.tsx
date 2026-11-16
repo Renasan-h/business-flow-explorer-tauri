@@ -78,17 +78,24 @@ export default function App() {
   Promise.all([Promise.resolve([{ id: '0', label: '同梱シナリオ' }, ...(nativeFolder ? [{ id: 'native', label: nativeFolder }] : [])]), listScenarios(activeRoot)])
    .then(async ([roots, paths]) => {
     setScenarioRoots(roots);
-    const scenarios = await Promise.all(paths.map(path => loadScenario(path)));
+    const results = await Promise.allSettled(paths.map(path => loadScenario(path)));
     if (cancelled) return;
-    setPaths(paths);
-    setScenarioTitles(Object.fromEntries(paths.map((path, index) => [path, scenarios[index].metadata.title])));
-    setScenarioCategories(Object.fromEntries(paths.map((path, index) => [path, scenarios[index].metadata.category || '未分類'])));
-    setSelected(current => paths.includes(current) ? current : paths[0] || '');
+    const valid = results.flatMap((result, index) => result.status === 'fulfilled'
+     ? [{ path: paths[index], scenario: result.value }] : []);
+    const failures = results.flatMap((result, index) => result.status === 'rejected'
+     ? [paths[index] + ': ' + String(result.reason)] : []);
+    const validPaths = valid.map(item => item.path);
+    setPaths(validPaths);
+    setScenarioTitles(Object.fromEntries(valid.map(item => [item.path, item.scenario.metadata.title])));
+    setScenarioCategories(Object.fromEntries(valid.map(item => [item.path, item.scenario.metadata.category || '未分類'])));
+    setError(failures.length ? failures.length + '件のシナリオを読み込めませんでした: ' + failures.join(' / ') : '');
+    setSelected(current => validPaths.includes(current) ? current : validPaths[0] || '');
+    if (validPaths.length === 0) setScenario(null);
    })
    .catch(error => { if (!cancelled) setError(String(error)); });
   return () => { cancelled = true; };
  }, [scenarioReload, activeRoot, nativeFolder]);
- useEffect(() => { if (!selected) return; setSelectedActorId(null); setSelectedInterfaceId(null); setPlaying(false); setFinished(false); setStep(0); setBranchChoices({}); loadScenario(selected).then(s => { setScenario(s); setError(''); }).catch(e => setError(String(e))); }, [selected, scenarioReload]);
+ useEffect(() => { if (!selected) { setScenario(null); return; } setSelectedActorId(null); setSelectedInterfaceId(null); setPlaying(false); setFinished(false); setStep(0); setBranchChoices({}); loadScenario(selected).then(s => { setScenario(s); setError(''); }).catch(e => setError(String(e))); }, [selected, scenarioReload]);
  // 最終ステップの完了時は停止し、再生ボタンを押すまで先頭へ戻さない。
  const [finished, setFinished] = useState(false);
  const routes = scenario ? playbackSteps(scenario.actors, scenario.steps, branchChoices) : [];
