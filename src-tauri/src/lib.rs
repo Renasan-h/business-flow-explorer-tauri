@@ -113,7 +113,9 @@ fn create_yaml(root: &Path, relative: &str, content: &str) -> Result<(), String>
     let path = validate_relative_path(relative)?;
     let parent = root.join(path).parent().ok_or("保存先が不正です")?.canonicalize()
         .map_err(|error| format!("保存先フォルダを参照できません: {error}"))?;
-    if !parent.starts_with(root) { return Err("選択したディレクトリ外には保存できません".into()); }
+    let canonical_root = root.canonicalize()
+        .map_err(|error| format!("保存先ルートを参照できません: {error}"))?;
+    if !parent.starts_with(&canonical_root) { return Err("選択したディレクトリ外には保存できません".into()); }
     let name = path.file_name().ok_or("ファイル名が不正です")?;
     let target = parent.join(name);
     let mut file = OpenOptions::new().write(true).create_new(true).open(&target)
