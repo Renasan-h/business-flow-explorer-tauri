@@ -317,10 +317,8 @@ mod tests {
         fs::remove_dir_all(base).unwrap();
     }
 
-    #[cfg(unix)]
     #[test]
     fn ignores_symlinked_directories_and_rejects_external_yaml() {
-        use std::os::unix::fs::symlink;
         let base = std::env::temp_dir().join(format!("bfe-symlink-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&base);
         let root = base.join("selected");
@@ -328,11 +326,25 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::create_dir_all(&external).unwrap();
         fs::write(external.join("secret.yaml"), "private").unwrap();
-        symlink(&external, root.join("linked")).unwrap();
+        let linked = root.join("linked");
+        #[cfg(unix)]
+        let link_result = std::os::unix::fs::symlink(&external, &linked);
+        #[cfg(windows)]
+        let link_result = std::os::windows::fs::symlink_dir(&external, &linked);
+        if let Err(error) = link_result {
+            #[cfg(windows)]
+            if error.kind() == std::io::ErrorKind::PermissionDenied {
+                fs::remove_dir_all(base).unwrap();
+                return;
+            }
+            panic!("ディレクトリのシンボリックリンクを作成できません: {error}");
+        }
         let canonical_root = root.canonicalize().unwrap();
         assert!(list_yaml(&canonical_root).unwrap().is_empty());
         assert!(resolve_existing(&canonical_root, "linked/secret.yaml").is_err());
         assert!(create_yaml(&canonical_root, "linked/new.yaml", "private").is_err());
+        assert!(!external.join("new.yaml").exists());
+        assert_eq!(fs::read_to_string(external.join("secret.yaml")).unwrap(), "private");
         fs::remove_dir_all(base).unwrap();
     }
 
