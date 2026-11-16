@@ -4,10 +4,5 @@
   "/scenarios/expense-reimbursement.yaml",
   "/scenarios/member-registration-modular.yaml",
   "/scenarios/mvc-attendance-search.yaml",
-  "/scenarios/nyuukai.yaml",
-  "/scenarios/nyuukai1.yaml",
-  "/scenarios/nyuukai2.yaml",
-  "/scenarios/nyuukai3.yaml",
-  "/scenarios/order-processing.yaml",
-  "/scenarios/sinario.yaml"
+  "/scenarios/order-processing.yaml"
 ]
