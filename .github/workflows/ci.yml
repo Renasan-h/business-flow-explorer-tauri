@@ -30,6 +30,23 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build Windows installer
         run: npm run build
+      - name: Package portable ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $portable = 'portable'
+          New-Item -ItemType Directory -Force -Path $portable | Out-Null
+          $exe = 'src-tauri/target/release/business-flow-explorer-tauri.exe'
+          if (-not (Test-Path $exe)) { throw "Portable executable not found: $exe" }
+          Copy-Item $exe "$portable/BusinessFlowExplorer.exe"
+          Copy-Item README.md "$portable/README.md"
+          Compress-Archive -Path "$portable/*" -DestinationPath 'BusinessFlowExplorer-Windows-Portable.zip' -Force
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-portable-windows
+          path: BusinessFlowExplorer-Windows-Portable.zip
+          if-no-files-found: error
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
