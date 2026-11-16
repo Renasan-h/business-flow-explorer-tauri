@@ -309,10 +309,13 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   const filename = editorScenarioFilename(isNew ? undefined : scenarioPath, metadata.id);
   try {
    if (scenarioPath?.startsWith('/scenarios/native/')) {
-    const relativePath = decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
-    await invoke('write_scenario_file', { relativePath, content: yaml });
+    // 新規作成ではmetadata.idに基づくファイル名を使い、既存ファイルを上書きしない。
+    const relativePath = isNew
+     ? filename
+     : decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
+    await invoke(isNew ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml });
     savedSnapshot.current = snapshotAtSave;
-    setMessage('選択したフォルダのYAMLを上書き保存しました。');
+    setMessage(isNew ? '選択したフォルダに新しいYAMLを作成しました。' : '選択したフォルダのYAMLを上書き保存しました。');
     return true;
    }
    const picker = (window as Window & FilePicker).showSaveFilePicker;
