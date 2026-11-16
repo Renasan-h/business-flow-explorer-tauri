@@ -397,6 +397,20 @@ mod tests {
     }
 
     #[test]
+    fn rejects_absolute_and_parent_traversal_paths_for_creation() {
+        let root = std::env::temp_dir().join(format!("bfe-create-boundary-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+
+        for relative in ["../outside.yaml", "nested/../outside.yml", "/outside.yaml", "notes.txt"] {
+            assert!(create_yaml(&canonical_root, relative, "private").is_err(), "{relative}");
+        }
+        assert!(list_yaml(&canonical_root).unwrap().is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn lists_yaml_recursively() {
         let root = std::env::temp_dir().join(format!("bfe-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
