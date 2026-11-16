@@ -24,6 +24,20 @@ try {
   if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Ctrl+Z did not undo actor creation');
   await page.keyboard.press('Control+y');
   if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Ctrl+Y did not redo actor creation');
+  // 新しい編集を行ったらRedo履歴が破棄されること。
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Second actor was not added');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not remove second actor');
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Replacement actor was not added');
+  const actorIdsBeforeRedo = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-actor-id')));
+  await page.keyboard.press('Control+y');
+  const actorIdsAfterRedo = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-actor-id')));
+  if (JSON.stringify(actorIdsBeforeRedo) !== JSON.stringify(actorIdsAfterRedo)) throw new Error('Redo incorrectly restored a discarded branch');
+  // 後続のドラッグ検証はノード1件の状態で行う。
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not restore single-actor state');
   const node = page.locator('[data-actor-id]').first();
   await node.waitFor();
   for (let i = 0; i < 8; i++) await page.getByRole('button', { name: '−', exact: true }).click();
@@ -67,7 +81,7 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, atomic drag undo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
