@@ -703,6 +703,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
        const waypoint = resolveWaypointHandle(target);
        if (waypoint) {
         waypointDrag.current = { pointerId: event.pointerId, ...waypoint };
+        beginHistoryDrag(event.pointerId);
         setSelectedStep(waypoint.stepId); setSelectedActor(null); setSelectedGroup(null);
         event.currentTarget.setPointerCapture(event.pointerId);
        }
@@ -727,6 +728,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
        if (selection.kind === 'toggle') return;
        if (selection.kind === 'drag') {
         multiDrag.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, initial: selection.initial };
+        beginHistoryDrag(event.pointerId);
        } else {
         marquee.current = { pointerId: event.pointerId, start: selection.start, additive: selection.additive };
         setMarqueeEnd(selection.start);
@@ -746,6 +748,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       if (resizeActor) {
        setSelectedActor(resizeActor.id);
        setSelectedStep(null); setSelectedGroup(null);
+       beginHistoryDrag(event.pointerId);
        drag.current = { id: event.pointerId, actorId: resizeActor.id, resizeActor: true,
         initialSize: { width: resizeActor.width ?? NODE_WIDTH, height: resizeActor.height ?? NODE_HEIGHT },
         x: event.clientX, y: event.clientY, initial: { ...resizeActor.position }, offset };
@@ -760,6 +763,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
        setSelectedGroup(group.id);
        setSelectedActor(null);
        setSelectedStep(null);
+       beginHistoryDrag(event.pointerId);
        drag.current = { id: event.pointerId, actorId: null, groupId: group.id, resizeGroup: Boolean(resizeHandle), initialMembers: actors.filter(actor => group.memberIds?.includes(actor.id)).map(actor => ({ id: actor.id, ...actor.position })), initialSize: { width: group.width, height: group.height }, x: event.clientX, y: event.clientY, initial: { x: group.x, y: group.y }, offset };
        event.currentTarget.setPointerCapture(event.pointerId);
        return;
@@ -890,8 +894,9 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
        wirePointer.current = null;
       }
       if (drag.current?.id === event.pointerId) drag.current = null;
+      finishHistoryDrag(event.pointerId);
      }}
-     onPointerCancel={() => { edgePointer.current = null; resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
+     onPointerCancel={() => { finishHistoryDrag(); edgePointer.current = null; resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
      <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
       <EditorGroups groups={groups} selectedGroup={selectedGroup} tool={tool} onSelect={id => { setSelectedGroup(id); setSelectedActor(null); setSelectedStep(null); }}/>
       <EditorEdges actors={actors} steps={steps} showLines={showLines} selectedStep={selectedStep} tool={tool} onSelect={id => { setSelectedStep(id); setSelectedActor(null); setSelectedGroup(null); }}/>
