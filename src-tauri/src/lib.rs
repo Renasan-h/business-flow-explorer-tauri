@@ -1,4 +1,5 @@
-use std::fs;
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
 
@@ -107,6 +108,28 @@ fn write_scenario_file(
     fs::write(target, content).map_err(|error| format!("YAMLを保存できません: {error}"))
 }
 
+// 新規作成は既存ファイルを上書きせず、選択フォルダ外へのアクセスを防ぐ。
+fn create_yaml(root: &Path, relative: &str, content: &str) -> Result<(), String> {
+    let path = validate_relative_path(relative)?;
+    let parent = root.join(path).parent().ok_or("保存先が不正です")?.canonicalize()
+        .map_err(|error| format!("保存先フォルダを参照できません: {error}"))?;
+    if !parent.starts_with(root) { return Err("選択したディレクトリ外には保存できません".into()); }
+    let name = path.file_name().ok_or("ファイル名が不正です")?;
+    let target = parent.join(name);
+    let mut file = OpenOptions::new().write(true).create_new(true).open(target)
+        .map_err(|error| format!("新規YAMLを作成できません: {error}"))?;
+    file.write_all(content.as_bytes()).map_err(|error| format!("YAMLを書き込めません: {error}"))
+}
+
+#[tauri::command]
+fn create_scenario_file(
+    state: State<'_, ScenarioRoot>,
+    relative_path: String,
+    content: String,
+) -> Result<(), String> {
+    create_yaml(&current_root(&state)?, &relative_path, &content)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -116,7 +139,8 @@ pub fn run() {
             select_scenario_folder,
             list_scenario_files,
             read_scenario_file,
-            write_scenario_file
+            write_scenario_file,
+            create_scenario_file
         ])
         .run(tauri::generate_context!())
         .expect("Tauriアプリケーションの起動に失敗しました");
