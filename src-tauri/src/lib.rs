@@ -103,9 +103,54 @@ fn write_scenario_file(
     relative_path: String,
     content: String,
 ) -> Result<(), String> {
-    // 既存ファイルの上書きのみ許可する。新規作成は別コマンドで設計する。
+    // 既存ファイルのみ更新する。書き込み失敗時に元ファイルを破損させない。
     let target = resolve_existing(&current_root(&state)?, &relative_path)?;
-    fs::write(target, content).map_err(|error| format!("YAMLを保存できません: {error}"))
+    replace_yaml(&target, &content)
+}
+
+// 同じディレクトリの一時ファイルへ書き込み、同期後に置き換える。
+// Windowsではrenameによる既存ファイルの置き換えが失敗する環境もあるため、
+// 元ファイルを退避してから切り替え、失敗した場合は復元する。
+fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
+    let parent = target.parent().ok_or("保存先が不正です")?;
+    let name = target.file_name().ok_or("ファイル名が不正です")?.to_string_lossy();
+    let mut index = 0u32;
+    let (temp, mut file) = loop {
+        let candidate = parent.join(format!(".{name}.{}.{}.tmp", std::process::id(), index));
+        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+            Ok(file) => break (candidate, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                index = index.checked_add(1).ok_or("一時ファイル名を確保できません")?;
+            }
+            Err(error) => return Err(format!("一時ファイルを作成できません: {error}")),
+        }
+    };
+    if let Err(error) = file.write_all(content.as_bytes()).and_then(|_| file.sync_all()) {
+        drop(file);
+        let _ = fs::remove_file(&temp);
+        return Err(format!("一時ファイルへの書き込みに失敗しました: {error}"));
+    }
+    drop(file);
+    // 元ファイルのパスを直接変更せず、同一ボリューム内で切り替える。
+    let backup = parent.join(format!(".{name}.{}.backup", std::process::id()));
+    if backup.exists() {
+        let _ = fs::remove_file(&temp);
+        return Err("保存用バックアップが既に存在します".into());
+    }
+    if let Err(error) = fs::rename(target, &backup) {
+        let _ = fs::remove_file(&temp);
+        return Err(format!("元ファイルを退避できません: {error}"));
+    }
+    if let Err(error) = fs::rename(&temp, target) {
+        let restored = fs::rename(&backup, target);
+        let _ = fs::remove_file(&temp);
+        return Err(match restored {
+            Ok(()) => format!("YAMLを置き換えられません: {error}"),
+            Err(restore_error) => format!("置き換え失敗: {error}; 復元にも失敗しました: {restore_error}; バックアップ: {}", backup.display()),
+        });
+    }
+    let _ = fs::remove_file(backup);
+    Ok(())
 }
 
 // 新規作成は既存ファイルを上書きせず、選択フォルダ外へのアクセスを防ぐ。
@@ -175,6 +220,20 @@ mod tests {
         assert!(create_yaml(&root, "nested/new.yaml", "metadata: second").is_err());
         assert_eq!(fs::read_to_string(root.join("nested/new.yaml")).unwrap(), "metadata: first");
         assert!(create_yaml(&root, "../escape.yaml", "invalid").is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn replaces_existing_yaml_without_creating_new_target() {
+        let root = std::env::temp_dir().join(format!("bfe-replace-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        fs::write(&target, "before").unwrap();
+        replace_yaml(&target, "after").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "after");
+        assert!(replace_yaml(&root.join("missing.yaml"), "invalid").is_err());
+        assert!(!root.join("missing.yaml").exists());
         fs::remove_dir_all(root).unwrap();
     }
 
