@@ -112,11 +112,21 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const history = useRef<EditorHistory[]>([]);
  // ポインタ操作中の中間座標は履歴に積まず、終了時の確定状態だけを記録する。
  const historyDragPointer = useRef<number | null>(null);
+ const historyDragStart = useRef<number | null>(null);
  const [historyDragRevision, setHistoryDragRevision] = useState(0);
- const beginHistoryDrag = (pointerId: number) => { historyDragPointer.current = pointerId; };
+ const beginHistoryDrag = (pointerId: number) => {
+  historyDragStart.current = historyIndex.current;
+  historyDragPointer.current = pointerId;
+ };
  const finishHistoryDrag = (pointerId?: number) => {
   if (historyDragPointer.current === null || (pointerId !== undefined && historyDragPointer.current !== pointerId)) return;
   historyDragPointer.current = null;
+  // ドラッグ中に発生した履歴を破棄し、確定状態を1件だけ追加する。
+  if (historyDragStart.current !== null) {
+   history.current = history.current.slice(0, historyDragStart.current + 1);
+   historyIndex.current = history.current.length - 1;
+   historyDragStart.current = null;
+  }
   setHistoryDragRevision(value => value + 1);
  };
  const historyIndex = useRef(-1);
