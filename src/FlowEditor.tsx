@@ -79,6 +79,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const waypointDrag = useRef<{ pointerId: number; stepId: string; index: number; direction: 'forward' | 'reverse' } | null>(null);
  const [zoom, setZoom] = useState(1);
  const [offset, setOffset] = useState({ x: 0, y: 0 });
+ const [preview, setPreview] = useState(false);
  const [viewport, setViewport] = useState({ width: 1100, height: 650 });
  // SVGの表示サイズをキャンバスの実寸に同期し、固定3600x1800のスクロール面を使わない。
  useEffect(() => {
@@ -92,7 +93,6 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  }, [preview]);
 
  const [message, setMessage] = useState('');
- const [preview, setPreview] = useState(false);
  const [exitConfirmationOpen, setExitConfirmationOpen] = useState(false);
  // データ変更だけを追跡し、ズームや選択操作は未保存扱いしない。
  // 編集中の実データを基準に初期スナップショットを作る。
