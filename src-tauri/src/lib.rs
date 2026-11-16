@@ -432,8 +432,8 @@ mod tests {
         fs::create_dir_all(root.join("nested")).unwrap();
         let canonical_root = root.canonicalize().unwrap();
         let relative = "nested/registration.yaml";
-        let initial = "metadata:\\n  title: 会員登録\\nactors: []\\nsteps: []\\n";
-        let edited = "metadata:\\n  title: 会員登録（更新）\\nactors: []\\nsteps: []\\n";
+        let initial = "metadata:\n  title: 会員登録\nactors: []\nsteps: []\n";
+        let edited = "metadata:\n  title: 会員登録（更新）\nactors: []\nsteps: []\n";
 
         create_yaml(&canonical_root, relative, initial).unwrap();
         assert_eq!(list_yaml(&canonical_root).unwrap(), vec![relative]);
