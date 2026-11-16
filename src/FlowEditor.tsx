@@ -164,7 +164,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   setNodeNumbers(current => ({ ...current, [id]: number }));
   // ノードと領域の新規作成で、表示中キャンバスの中心座標を共通利用する。
   const center = visibleCanvasCenter(svgRef.current, canvasRef.current, offset, zoom, { x: WIDTH / 2, y: HEIGHT / 2 });
-  const position = { x: Math.max(NODE_WIDTH / 2, Math.min(WIDTH - NODE_WIDTH / 2, center.x)), y: Math.max(NODE_HEIGHT / 2, Math.min(HEIGHT - NODE_HEIGHT / 2, center.y)) };
+  const position = center;
   setActors(current => [...current, { id, name: '新しいノード ' + number, type: 'service', position }]);
   setSelectedActor(id);
   setSelectedStep(null);
@@ -186,10 +186,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
    ...original,
    id: newId,
    name: original.name + ' (コピー)',
-   position: clampNodePosition(original, {
-    x: original.position.x + (original.position.x + (original.width ?? NODE_WIDTH) / 2 + 40 <= WIDTH ? 40 : -40),
-    y: original.position.y + (original.position.y + (original.height ?? NODE_HEIGHT) / 2 + 40 <= HEIGHT ? 40 : -40),
-   }, { width: WIDTH, height: HEIGHT }),
+   position: { x: original.position.x + 40, y: original.position.y + 40 },
    // tagsは配列なので、元ノードと参照を共有しない。
    ...(original.tags ? { tags: [...original.tags] } : {}),
   };
@@ -477,7 +474,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   const id = 'group-' + crypto.randomUUID().slice(0, 8);
   const size = { width: 600, height: 350 };
   const center = visibleCanvasCenter(svgRef.current, canvasRef.current, offset, zoom, { x: WIDTH / 2, y: HEIGHT / 2 });
-  const origin = boundedGroupOrigin(center, size, { width: WIDTH, height: HEIGHT });
+  const origin = { x: center.x - size.width / 2, y: center.y - size.height / 2 };
   setGroups(items => [...items, { id, name: '新しい領域', color: '#2563eb', ...origin, ...size }]);
   setSelectedGroup(id); setSelectedActor(null); setSelectedStep(null);
  };
@@ -651,15 +648,13 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
        const dx = end.x - start.x;
        const dy = end.y - start.y;
        // 全選択ノードの相対位置を維持したままキャンバス境界内に収める。
-       const delta = boundedGroupDelta(active.initial, { x: dx, y: dy }, {
-        width: WIDTH, height: HEIGHT, nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT,
-       }, actors);
+       const delta = { x: dx, y: dy };
        setActors(current => moveSelectedActors(current, active.initial, delta));
        return;
       }
       if (waypointDrag.current?.pointerId === event.pointerId) {
        const { stepId, index, direction } = waypointDrag.current;
-       const position = clampWaypoint(toWorld(event.clientX, event.clientY), { width: WIDTH, height: HEIGHT });
+       const position = toWorld(event.clientX, event.clientY);
        setSteps(current => current.map(step => step.id === stepId ? moveWaypoint(step, direction, index, position) : step));
        return;
       }
@@ -679,23 +674,23 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       if (!delta) return;
       const { x: dx, y: dy } = delta;
       if (current.groupId) {
-       const nextX = Math.max(0, current.initial.x + dx);
-       const nextY = Math.max(0, current.initial.y + dy);
+       const nextX = current.initial.x + dx;
+       const nextY = current.initial.y + dy;
        setGroups(items => items.map(item => item.id === current.groupId ? current.resizeGroup ? { ...item, width: Math.max(200, (current.initialSize?.width ?? item.width) + dx), height: Math.max(120, (current.initialSize?.height ?? item.height) + dy) } : { ...item, x: nextX, y: nextY } : item));
        // 領域移動時は所属ノードだけをドラッグ開始時の座標から同量移動する。
        if (!current.resizeGroup && current.initialMembers?.length) {
         const memberPositions = new Map(current.initialMembers.map(item => [item.id, item]));
         setActors(items => items.map(actor => {
          const initial = memberPositions.get(actor.id);
-         return initial ? { ...actor, position: clampNodePosition(actor, { x: initial.x + nextX - current.initial.x, y: initial.y + nextY - current.initial.y }, { width: WIDTH, height: HEIGHT }) } : actor;
+         return initial ? { ...actor, position: { x: initial.x + nextX - current.initial.x, y: initial.y + nextY - current.initial.y } } : actor;
         }));
        }
       } else if (current.actorId && current.resizeActor) {
        const size = current.initialSize;
        if (!size) return;
        // 中心座標を固定するため、キャンバス端を超えないサイズに制限する。
-       const maxWidth = Math.min(800, current.initial.x * 2, (WIDTH - current.initial.x) * 2);
-       const maxHeight = Math.min(500, current.initial.y * 2, (HEIGHT - current.initial.y) * 2);
+       const maxWidth = 800;
+       const maxHeight = 500;
        changeActor(current.actorId, {
         width: Math.max(100, Math.min(maxWidth, size.width + dx * 2)),
         height: Math.max(60, Math.min(maxHeight, size.height + dy * 2)),
