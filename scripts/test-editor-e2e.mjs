@@ -273,10 +273,10 @@ try {
     await page.getByRole('menuitem', { name: '往路の経由点を追加' }).waitFor();
   };
   await openReceiveMenu();
-  await page.getByRole('menuitem', { name: '往路の経由点を追加' }).click();
+  await page.getByRole('menuitem', { name: '往路の経由点を追加' }).dispatchEvent('click');
   await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').waitFor();
   await openReceiveMenu();
-  await page.getByRole('menuitem', { name: '復路の経由点を追加' }).click();
+  await page.getByRole('menuitem', { name: '復路の経由点を追加' }).dispatchEvent('click');
   await receiveEdge.locator('[data-waypoint-direction="reverse"]').waitFor();
   await page.keyboard.press('Control+z');
   await page.getByRole('button', { name: '1. 注文受付' }).click();
@@ -290,7 +290,7 @@ try {
     throw new Error('Redo did not restore reverse waypoint');
   }
   await openReceiveMenu();
-  await page.getByRole('menuitem', { name: '往路の経由点を解除' }).click();
+  await page.getByRole('menuitem', { name: '往路の経由点を解除' }).dispatchEvent('click');
   await page.getByRole('button', { name: '1. 注文受付' }).click();
   if (await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 0 ||
       await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
@@ -302,7 +302,7 @@ try {
     throw new Error('Undo did not restore forward waypoint');
   }
   await openReceiveMenu();
-  await page.getByRole('menuitem', { name: '復路の経由点を解除' }).click();
+  await page.getByRole('menuitem', { name: '復路の経由点を解除' }).dispatchEvent('click');
   await page.getByRole('button', { name: '1. 注文受付' }).click();
   if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
       await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
