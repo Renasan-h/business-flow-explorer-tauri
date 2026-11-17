@@ -268,7 +268,8 @@ try {
   // 往路・復路の経由点を独立して追加・解除し、Undo/Redoでも相手側を保持する。
   const receiveEdge = page.locator('.editor-edge[data-step-id="receive"]');
   const openReceiveMenu = async () => {
-    await receiveEdge.locator('path').first().click({ button: 'right', force: true });
+    // SVGパスの外接矩形中心は実際の線上とは限らないため、対象要素へ直接contextmenuを発火する。
+    await receiveEdge.locator('path').first().dispatchEvent('contextmenu', { bubbles: true, clientX: 450, clientY: 300, button: 2 });
     await page.getByRole('menuitem', { name: '往路の経由点を追加' }).waitFor();
   };
   await openReceiveMenu();
