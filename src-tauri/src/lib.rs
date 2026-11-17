@@ -120,6 +120,12 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
     if !target.is_file() {
         return Err("保存先のYAMLファイルが存在しないか、通常ファイルではありません".into());
     }
+    // 一時ファイルのrenameは読み取り専用属性を回避できるため、明示的に更新を拒否する。
+    if fs::metadata(target).map_err(|error| format!("保存先の属性を取得できません: {error}"))?
+        .permissions().readonly()
+    {
+        return Err("読み取り専用のYAMLファイルは上書きできません".into());
+    }
     let parent = target.parent().ok_or("保存先が不正です")?;
     let name = target.file_name().ok_or("ファイル名が不正です")?.to_string_lossy();
     let mut index = 0u32;
@@ -244,6 +250,28 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "after");
         assert!(replace_yaml(&root.join("missing.yaml"), "invalid").is_err());
         assert!(!root.join("missing.yaml").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn readonly_yaml_is_not_overwritten_or_left_with_temporary_files() {
+        let root = std::env::temp_dir().join(format!("bfe-readonly-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        fs::write(&target, "metadata: original").unwrap();
+        let mut permissions = fs::metadata(&target).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&target, permissions).unwrap();
+
+        assert!(replace_yaml(&target, "metadata: overwritten").is_err());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "metadata: original");
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1, "一時ファイルを残さない");
+
+        // 後片付けでは元の権限を復元する。
+        let mut permissions = fs::metadata(&target).unwrap().permissions();
+        permissions.set_readonly(false);
+        fs::set_permissions(&target, permissions).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
