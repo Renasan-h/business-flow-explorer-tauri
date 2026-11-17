@@ -464,6 +464,8 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
    setSelectedGroup(null);
   }
  };
+ // 新規YAMLの初回作成先を保持し、2回目以降は同じファイルを安全に更新する。
+ const nativeCreatedPath = useRef<string | null>(null);
  /** 入力検証後にYAMLを書き出す。GitHubやシナリオ一覧の自動更新は行わない。 */
  const save = async (): Promise<boolean> => {
   // 保存ダイアログ表示中の状態変化に左右されないよう、保存対象を固定する。
@@ -502,12 +504,14 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   try {
    if (scenarioPath?.startsWith('/scenarios/native/')) {
     // 新規作成ではmetadata.idに基づくファイル名を使い、既存ファイルを上書きしない。
-    const relativePath = isNew
+    const creating = isNew && nativeCreatedPath.current === null;
+    const relativePath = nativeCreatedPath.current ?? (isNew
      ? filename
-     : decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
-    await invoke(isNew ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml });
+     : decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length)));
+    await invoke(creating ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml });
+    if (creating) nativeCreatedPath.current = relativePath;
     savedSnapshot.current = snapshotAtSave;
-    setMessage(isNew ? '選択したフォルダに新しいYAMLを作成しました。' : '選択したフォルダのYAMLを上書き保存しました。');
+    setMessage(creating ? '選択したフォルダに新しいYAMLを作成しました。' : '選択したフォルダのYAMLを上書き保存しました。');
     return true;
    }
    const picker = (window as Window & FilePicker).showSaveFilePicker;
@@ -699,7 +703,6 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   setOrderSource(null);
  };
  const isNew = initial.actors.length === 0 && initial.steps.length === 0;
- const nativeCreatedPath = useRef<string | null>(null);
  useEffect(() => { setMessage(''); }, [tool]);
  // プレビューに編集中の状態を渡す。戻っても編集中の変更は保持される。
  if (preview) return <FlowPreview actors={actors} steps={steps} interfaces={interfaces} title={metadata.title} onDeleteStep={deleteStep} onExit={requestExit} onClose={() => setPreview(false)}/>;
