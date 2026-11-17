@@ -218,6 +218,8 @@ try {
 
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
   // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
+  // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
+  await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
   const [download] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'YAMLを保存…' }).click(),
