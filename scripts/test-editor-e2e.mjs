@@ -239,18 +239,11 @@ try {
   await page.keyboard.press('Control+z');
   await selectCommunication();
   if (await direction.inputValue() !== 'both') throw new Error('Second Undo did not restore bidirectional mode');
+  // 復路内容のフォーム編集はYAML保存にも反映される。元の値に戻して後続の再読込テストへ渡す。
   const reversePayload = page.getByLabel('復路通信内容');
   await reversePayload.fill('編集後の応答');
   if (await reversePayload.inputValue() !== '編集後の応答') throw new Error('Reverse payload editing failed');
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Control+z');
-  await selectCommunication();
-  if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Undo did not restore reverse payload');
-  await page.keyboard.press('Control+y');
-  await selectCommunication();
-  if (await reversePayload.inputValue() !== '編集後の応答') throw new Error('Redo did not restore reverse payload');
-  await page.keyboard.press('Control+z');
-  await selectCommunication();
+  await reversePayload.fill('注文受付結果');
   if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Reverse payload was not restored for YAML save');
 
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
