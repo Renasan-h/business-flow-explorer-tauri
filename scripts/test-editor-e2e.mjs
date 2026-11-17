@@ -222,6 +222,30 @@ try {
     throw new Error('Initial YAML view is not centered on variable-size negative-coordinate nodes: ' + JSON.stringify({ loadedCenter, loadedCanvas }));
   }
 
+  // 双方向通信のUI編集をUndo/Redoで戻せること。往復線は1件の通信として管理する。
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  const direction = page.getByLabel('接続方向');
+  await direction.selectOption('one');
+  if (await page.getByLabel('復路通信内容').count() !== 0) {
+    throw new Error('Reverse communication settings remained visible in one-way mode');
+  }
+  await page.keyboard.press('Control+z');
+  if (await direction.inputValue() !== 'both') throw new Error('Undo did not restore bidirectional mode');
+  await page.keyboard.press('Control+y');
+  if (await direction.inputValue() !== 'one') throw new Error('Redo did not restore one-way mode');
+  await page.keyboard.press('Control+z');
+  if (await direction.inputValue() !== 'both') throw new Error('Second Undo did not restore bidirectional mode');
+  const reversePayload = page.getByLabel('復路通信内容');
+  await reversePayload.fill('編集後の応答');
+  if (await reversePayload.inputValue() !== '編集後の応答') throw new Error('Reverse payload editing failed');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Control+z');
+  if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Undo did not restore reverse payload');
+  await page.keyboard.press('Control+y');
+  if (await reversePayload.inputValue() !== '編集後の応答') throw new Error('Redo did not restore reverse payload');
+  await page.keyboard.press('Control+z');
+  if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Reverse payload was not restored for YAML save');
+
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
   // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
   // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
@@ -277,7 +301,7 @@ try {
 
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
