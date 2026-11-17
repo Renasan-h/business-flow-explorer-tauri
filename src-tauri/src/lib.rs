@@ -116,6 +116,10 @@ fn write_scenario_file(
 // 元ファイルを退避してから切り替え、失敗した場合は復元する。
 fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
     let _guard = YAML_SAVE_LOCK.lock().map_err(|_| "保存処理のロックを取得できません".to_string())?;
+    // フォルダをYAMLファイルとして置換すると元フォルダが退避されるため、必ず通常ファイルに限定する。
+    if !target.is_file() {
+        return Err("保存先のYAMLファイルが存在しないか、通常ファイルではありません".into());
+    }
     let parent = target.parent().ok_or("保存先が不正です")?;
     let name = target.file_name().ok_or("ファイル名が不正です")?.to_string_lossy();
     let mut index = 0u32;
@@ -240,6 +244,26 @@ mod tests {
         assert_eq!(fs::read_to_string(&target).unwrap(), "after");
         assert!(replace_yaml(&root.join("missing.yaml"), "invalid").is_err());
         assert!(!root.join("missing.yaml").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn failed_update_does_not_replace_directory_or_create_missing_file() {
+        let root = std::env::temp_dir().join(format!("bfe-save-target-type-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("directory.yaml")).unwrap();
+        fs::write(root.join("directory.yaml/important.txt"), "keep").unwrap();
+        let directory = root.join("directory.yaml");
+        let missing = root.join("missing.yaml");
+
+        assert!(replace_yaml(&directory, "metadata: overwritten").is_err());
+        assert!(directory.is_dir(), "保存失敗時も元フォルダを残す");
+        assert_eq!(fs::read_to_string(directory.join("important.txt")).unwrap(), "keep");
+        assert!(replace_yaml(&missing, "metadata: new").is_err());
+        assert!(!missing.exists(), "更新処理では新規ファイルを作らない");
+        let leftovers = fs::read_dir(&root).unwrap().filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
+        assert_eq!(leftovers, 0);
         fs::remove_dir_all(root).unwrap();
     }
 
