@@ -119,8 +119,9 @@ try {
     scenario.actors[3].position = { x: 300, y: -300 };
     await route.fulfill({ response, body: stringify(scenario), headers: { ...response.headers(), 'content-type': 'text/yaml' } });
   });
+  // シナリオ一覧をテスト対象の1件に限定し、選択状態に依存せず読み込む。
+  await page.route('**/scenarios/manifest.json', route => route.fulfill({ json: ['/scenarios/order-processing.yaml'] }));
   await page.reload();
-  await page.getByRole('button', { name: /ECサイトの注文処理|order-processing\.yaml/ }).click();
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
