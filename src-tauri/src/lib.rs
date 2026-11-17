@@ -159,6 +159,8 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
 
 // 新規作成は既存ファイルを上書きせず、選択フォルダ外へのアクセスを防ぐ。
 fn create_yaml(root: &Path, relative: &str, content: &str) -> Result<(), String> {
+    // 新規作成も更新と同じロックで直列化し、同時保存による競合を防ぐ。
+    let _guard = YAML_SAVE_LOCK.lock().map_err(|_| "保存処理のロックを取得できません".to_string())?;
     let path = validate_relative_path(relative)?;
     let parent = root.join(path).parent().ok_or("保存先が不正です")?.canonicalize()
         .map_err(|error| format!("保存先フォルダを参照できません: {error}"))?;
@@ -421,6 +423,28 @@ mod tests {
         assert!(create_yaml(&root, "scenario.yaml", "metadata: replaced").is_err());
         assert_eq!(fs::read_to_string(&target).unwrap(), "metadata: original");
         assert_eq!(list_yaml(&root).unwrap(), vec!["scenario.yaml"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn concurrent_creation_does_not_overwrite_existing_yaml() {
+        let root = std::env::temp_dir().join(format!("bfe-create-concurrent-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+
+        // 同じ保存先への同時作成は1件のみ成功し、後続の内容で上書きされない。
+        let results: Vec<_> = std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..8).map(|index| {
+                let root = &canonical_root;
+                scope.spawn(move || create_yaml(root, "scenario.yaml", &format!("writer-{index}")))
+            }).collect();
+            handles.into_iter().map(|handle| handle.join().unwrap()).collect()
+        });
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        let saved = fs::read_to_string(canonical_root.join("scenario.yaml")).unwrap();
+        assert!(saved.starts_with("writer-"));
+        assert_eq!(list_yaml(&canonical_root).unwrap(), vec!["scenario.yaml"]);
         fs::remove_dir_all(root).unwrap();
     }
 
