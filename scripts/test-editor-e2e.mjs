@@ -82,13 +82,13 @@ try {
   await page.getByLabel('X', { exact: true }).fill('400');
   await page.getByLabel('Y', { exact: true }).fill('200');
   await page.getByRole('button', { name: '表示リセット' }).click();
-  const bounds = await page.locator('[data-actor-id] rect:first-child').evaluateAll(elements =>
+  const bounds = await page.locator('[data-actor-id]').evaluateAll(elements =>
     elements.map(element => {
-      const rect = element.getBoundingClientRect();
+      const rect = element.querySelector('rect').getBoundingClientRect();
       return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
     }));
   const canvas = await svg.boundingBox();
-  if (!canvas || bounds.length !== 2) throw new Error('Expected two nodes and a visible canvas for negative-coordinate test');
+  if (!canvas || bounds.length !== 2) throw new Error(`Expected two nodes and a visible canvas for negative-coordinate test: nodes=${bounds.length}, canvas=${Boolean(canvas)}`);
   const midpoint = {
     x: (Math.min(...bounds.map(item => item.x)) + Math.max(...bounds.map(item => item.x))) / 2,
     y: (Math.min(...bounds.map(item => item.y)) + Math.max(...bounds.map(item => item.y))) / 2,
