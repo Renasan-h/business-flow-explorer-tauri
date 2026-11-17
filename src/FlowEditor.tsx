@@ -80,7 +80,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const [zoom, setZoom] = useState(1);
  const [offset, setOffset] = useState({ x: 0, y: 0 });
  const [preview, setPreview] = useState(false);
- const [viewport, setViewport] = useState({ width: 1100, height: 650 });
+ const [viewport, setViewport] = useState({ width: 0, height: 0 });
  const updateZoomAroundCenter = (update: (value: number) => number) => {
   const next = update(zoom);
   const center = { x: viewport.width / 2, y: viewport.height / 2 };
