@@ -224,7 +224,7 @@ try {
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'YAMLを保存…' }).click(),
   ]);
-  if (!/\\.ya?ml$/i.test(download.suggestedFilename())) {
+  if (!/\.ya?ml$/i.test(download.suggestedFilename())) {
     throw new Error('Downloaded scenario does not have a YAML filename: ' + download.suggestedFilename());
   }
   const downloadedPath = await download.path();
