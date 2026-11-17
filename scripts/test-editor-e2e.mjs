@@ -119,7 +119,8 @@ try {
     scenario.actors[3].position = { x: 300, y: -300 };
     await route.fulfill({ response, body: stringify(scenario), headers: { ...response.headers(), 'content-type': 'text/yaml' } });
   });
-  await page.getByRole('button', { name: /ECサイトの注文処理/ }).click();
+  await page.reload();
+  await page.getByRole('button', { name: /ECサイトの注文処理|order-processing\.yaml/ }).click();
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
