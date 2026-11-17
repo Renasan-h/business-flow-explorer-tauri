@@ -259,6 +259,7 @@ try {
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
+  await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
   const [roundTripDownload] = await Promise.all([
     page.waitForEvent('download'),
     page.getByRole('button', { name: 'YAMLを保存…' }).click(),
