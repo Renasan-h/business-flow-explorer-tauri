@@ -64,6 +64,24 @@ try {
   await page.keyboard.press('Control+y');
   const redone = await node.locator('rect').first().getAttribute('x');
   if (redone !== end) throw new Error('Ctrl+Y did not restore the dragged position');
+  // ポインタ操作が中断された場合は、ノード座標とUndo履歴をドラッグ前へ戻す。
+  const cancelStart = await node.locator('rect').first().getAttribute('x');
+  const cancelBox = await node.locator('rect').first().boundingBox();
+  if (!cancelBox) throw new Error('Node is not visible for pointer cancellation test');
+  await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelBox.x + cancelBox.width / 2 + 65, cancelBox.y + cancelBox.height / 2 + 15, { steps: 8 });
+  const cancelMoved = await node.locator('rect').first().getAttribute('x');
+  if (cancelMoved === cancelStart) throw new Error('Cancellation test did not move the actor');
+  await svg.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  const cancelRestored = await node.locator('rect').first().getAttribute('x');
+  if (cancelRestored !== cancelStart) throw new Error(`PointerCancel did not restore actor: before=${cancelStart}, after=${cancelRestored}`);
+  await page.keyboard.press('Control+z');
+  const afterCancelUndo = await node.locator('rect').first().getAttribute('x');
+  if (afterCancelUndo !== start) throw new Error('PointerCancel created an extra Undo history entry');
+  await page.keyboard.press('Control+y');
+  if (await node.locator('rect').first().getAttribute('x') !== cancelStart) throw new Error('Redo failed after PointerCancel');
   await page.getByRole('button', { name: '表示リセット' }).click();
   // プレビューへの遷移で編集データを破棄・再初期化しないことを確認する。
   const beforePreview = await node.locator('rect').first().getAttribute('x');
@@ -141,7 +159,7 @@ try {
   }
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
