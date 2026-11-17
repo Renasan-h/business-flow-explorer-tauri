@@ -100,7 +100,7 @@ export type Scenario = Omit<ScenarioData, 'actors' | 'steps'> & {
 // 同一IDのactorは統合し、同じ項目に異なる値があれば黙って上書きしない。
 function mergeActor(existing: Actor, incoming: Actor): Actor {
  const result: Actor = { ...existing };
- for (const key of ['name', 'type', 'ip', 'instanceName', 'icon', 'description', 'environment', 'endpoint', 'tags', 'color', 'documents', 'position'] as const) {
+ for (const key of ['name', 'type', 'ip', 'instanceName', 'icon', 'description', 'environment', 'endpoint', 'tags', 'color', 'documents', 'position', 'width', 'height'] as const) {
   const previous = existing[key];
   const next = incoming[key];
   if (next === undefined) continue;
