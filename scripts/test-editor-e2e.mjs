@@ -117,6 +117,40 @@ try {
       Math.abs(midpoint.y - (canvas.y + canvas.height / 2)) > 3) {
     throw new Error('Reset view did not center the negative/positive actor bounds: ' + JSON.stringify({ midpoint, canvas }));
   }
+  // 複数選択したノードのドラッグは1件の履歴として確定し、全ノードを同時に復元する。
+  await page.getByRole('button', { name: '複数ノード選択・移動' }).click();
+  await page.getByRole('button', { name: 'すべて選択' }).click();
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  const multiPositions = () => page.locator('[data-actor-id]').evaluateAll(elements =>
+    elements.map(element => ({ id: element.getAttribute('data-actor-id'), x: element.querySelector('rect').getAttribute('x'), y: element.querySelector('rect').getAttribute('y') })));
+  const multiBefore = await multiPositions();
+  const multiBox = await page.locator('[data-actor-id]').first().locator('rect').first().boundingBox();
+  if (!multiBox) throw new Error('First node is not visible for multi drag');
+  await page.mouse.move(multiBox.x + multiBox.width / 2, multiBox.y + multiBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(multiBox.x + multiBox.width / 2 + 48, multiBox.y + multiBox.height / 2 + 32, { steps: 12 });
+  await page.mouse.up();
+  const multiAfter = await multiPositions();
+  if (multiAfter.some((item, index) => item.x === multiBefore[index].x || item.y === multiBefore[index].y)) {
+    throw new Error('Multi drag did not move every selected actor');
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiBefore)) throw new Error('Multi drag was not restored by one Undo');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag was not restored by one Redo');
+  // 複数ノード移動中のキャンセルでも全ノードを復元し、Undo履歴を増やさない。
+  const cancelMultiBox = await page.locator('[data-actor-id]').first().locator('rect').first().boundingBox();
+  if (!cancelMultiBox) throw new Error('First node is not visible for multi cancel');
+  await page.mouse.move(cancelMultiBox.x + cancelMultiBox.width / 2, cancelMultiBox.y + cancelMultiBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelMultiBox.x + cancelMultiBox.width / 2 + 35, cancelMultiBox.y + cancelMultiBox.height / 2 + 20, { steps: 8 });
+  await svg.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag cancellation did not restore all actors');
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiBefore)) throw new Error('Multi drag cancellation created an extra history entry');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag redo failed after cancellation');
   await page.getByRole('button', { name: '再生画面へ戻る' }).click();
   await page.getByRole('dialog', { name: '未保存の変更があります' }).waitFor();
   await page.getByRole('button', { name: '編集を続ける' }).click();
@@ -159,7 +193,7 @@ try {
   }
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
