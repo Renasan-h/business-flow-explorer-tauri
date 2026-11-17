@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { parse, stringify } from 'yaml';
+import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const server = spawn('npm', ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { shell: process.platform === 'win32', stdio: 'pipe' });
@@ -107,8 +108,7 @@ try {
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   // 既存YAMLの読み込み直後も、負座標・可変サイズのノード群を中心表示する。
   await page.route('**/scenarios/order-processing.yaml', async route => {
-    const response = await route.fetch();
-    const scenario = parse(await response.text());
+    const scenario = parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
     scenario.actors[0].position = { x: -1800, y: -950 };
     scenario.actors[0].width = 360;
     scenario.actors[0].height = 220;
@@ -117,7 +117,7 @@ try {
     scenario.actors[1].height = 80;
     scenario.actors[2].position = { x: -500, y: 250 };
     scenario.actors[3].position = { x: 300, y: -300 };
-    await route.fulfill({ response, body: stringify(scenario), headers: { ...response.headers(), 'content-type': 'text/yaml' } });
+    await route.fulfill({ status: 200, contentType: 'text/yaml', body: stringify(scenario) });
   });
   // シナリオ一覧をテスト対象の1件に限定し、選択状態に依存せず読み込む。
   await page.route('**/scenarios/manifest.json', route => route.fulfill({ json: ['/scenarios/order-processing.yaml'] }));
