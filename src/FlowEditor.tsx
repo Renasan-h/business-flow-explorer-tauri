@@ -251,10 +251,10 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  // ノードの外接矩形を基準に表示中心と倍率を求める。負の座標も同様に扱う。
  const fitActorsToViewport = () => {
   const bounds = actors.map(actor => ({
-   left: actor.position.x,
-   top: actor.position.y,
-   right: actor.position.x + (actor.width ?? NODE_WIDTH),
-   bottom: actor.position.y + (actor.height ?? NODE_HEIGHT),
+   left: actor.position.x - (actor.width ?? NODE_WIDTH) / 2,
+   top: actor.position.y - (actor.height ?? NODE_HEIGHT) / 2,
+   right: actor.position.x + (actor.width ?? NODE_WIDTH) / 2,
+   bottom: actor.position.y + (actor.height ?? NODE_HEIGHT) / 2,
   }));
   if (!bounds.length) {
    setZoom(1);
