@@ -73,6 +73,30 @@ try {
   const afterPreview = await page.locator('[data-actor-id]').first().locator('rect').first().getAttribute('x');
   if (beforePreview !== afterPreview) throw new Error('Node coordinates changed after preview round trip');
   if (await page.locator('[data-actor-id]').count() !== actorCount) throw new Error('Actors changed after preview round trip');
+  // 負座標と正座標に離れたノードの表示リセットは、外接範囲の中心を画面中央に合わせる。
+  await page.locator('[data-actor-id]').first().locator('rect').first().click();
+  await page.getByLabel('X', { exact: true }).fill('-800');
+  await page.getByLabel('Y', { exact: true }).fill('-400');
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  await page.locator('[data-actor-id]').last().locator('rect').first().click();
+  await page.getByLabel('X', { exact: true }).fill('400');
+  await page.getByLabel('Y', { exact: true }).fill('200');
+  await page.getByRole('button', { name: '表示リセット' }).click();
+  const bounds = await page.locator('[data-actor-id] rect:first-child').evaluateAll(elements =>
+    elements.map(element => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }));
+  const canvas = await svg.boundingBox();
+  if (!canvas || bounds.length !== 2) throw new Error('Expected two nodes and a visible canvas for negative-coordinate test');
+  const midpoint = {
+    x: (Math.min(...bounds.map(item => item.x)) + Math.max(...bounds.map(item => item.x))) / 2,
+    y: (Math.min(...bounds.map(item => item.y)) + Math.max(...bounds.map(item => item.y))) / 2,
+  };
+  if (Math.abs(midpoint.x - (canvas.x + canvas.width / 2)) > 3 ||
+      Math.abs(midpoint.y - (canvas.y + canvas.height / 2)) > 3) {
+    throw new Error('Reset view did not center the negative/positive actor bounds: ' + JSON.stringify({ midpoint, canvas }));
+  }
   await page.getByRole('button', { name: '再生画面へ戻る' }).click();
   await page.getByRole('dialog', { name: '未保存の変更があります' }).waitFor();
   await page.getByRole('button', { name: '編集を続ける' }).click();
@@ -81,7 +105,7 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, negative-coordinate centering, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
