@@ -138,6 +138,32 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   historyDragBaseline.current = null;
   setHistoryDragRevision(value => value + 1);
  };
+ // pointercancelは操作の確定ではないため、ドラッグ開始前の状態を復元する。
+ const cancelHistoryDrag = (pointerId: number) => {
+  if (historyDragPointer.current !== pointerId) return;
+  const before = historyDragBaseline.current;
+  const start = historyDragStart.current;
+  historyDragPointer.current = null;
+  historyDragStart.current = null;
+  historyDragBaseline.current = null;
+  if (before && start !== null) {
+   history.current = history.current.slice(0, start + 1);
+   historyIndex.current = history.current.length - 1;
+   // 復元時のstate更新を新しいUndo履歴として記録しない。
+   if (JSON.stringify(currentHistory()) !== JSON.stringify(before)) {
+    restoringHistory.current = true;
+    const state = structuredClone(before);
+    setActors(state.actors);
+    setSteps(state.steps);
+    setMetadata(state.metadata);
+    setGroups(state.groups);
+    setInterfaces(state.interfaces);
+    setTemplateReferences(state.templateReferences);
+   }
+  }
+  setHistoryDragRevision(value => value + 1);
+  setHistoryRevision(value => value + 1);
+ };
  const historyIndex = useRef(-1);
  const restoringHistory = useRef(false);
  const [historyRevision, setHistoryRevision] = useState(0);
@@ -914,7 +940,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
       if (drag.current?.id === event.pointerId) drag.current = null;
       finishHistoryDrag(event.pointerId);
      }}
-     onPointerCancel={() => { finishHistoryDrag(); edgePointer.current = null; resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
+     onPointerCancel={event => { cancelHistoryDrag(event.pointerId); edgePointer.current = null; resetMultiSelectionPointer(); waypointDrag.current = null; drag.current = null; wirePointer.current = null; setWire(null); orderDrag.current = null; setOrderCursor(null); }}> 
      <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
       <EditorGroups groups={groups} selectedGroup={selectedGroup} tool={tool} onSelect={id => { setSelectedGroup(id); setSelectedActor(null); setSelectedStep(null); }}/>
       <EditorEdges actors={actors} steps={steps} showLines={showLines} selectedStep={selectedStep} tool={tool} onSelect={id => { setSelectedStep(id); setSelectedActor(null); setSelectedGroup(null); }}/>
