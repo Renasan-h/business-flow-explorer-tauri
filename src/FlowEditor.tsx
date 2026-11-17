@@ -123,18 +123,19 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const finishHistoryDrag = (pointerId?: number) => {
   if (historyDragPointer.current === null || (pointerId !== undefined && historyDragPointer.current !== pointerId)) return;
   historyDragPointer.current = null;
-  // ドラッグ中に発生した履歴を破棄し、確定状態を1件だけ追加する。
+  // 確定直前のReact state更新が未反映でも、次のlayout effectで最新の状態を履歴化する。
+  // ドラッグ開始時の位置へ履歴を戻し、最終状態を1件だけ追加する。
   if (historyDragStart.current !== null && historyDragBaseline.current) {
    const before = historyDragBaseline.current;
-   const after = currentHistory();
-   history.current = history.current.slice(0, historyDragStart.current);
-   history.current.push(before);
-   if (JSON.stringify(before) !== JSON.stringify(after)) history.current.push(after);
+   history.current = history.current.slice(0, historyDragStart.current + 1);
+   if (JSON.stringify(history.current[history.current.length - 1]) !== JSON.stringify(before)) {
+    history.current.push(before);
+   }
    if (history.current.length > 100) history.current = history.current.slice(-100);
    historyIndex.current = history.current.length - 1;
-   historyDragStart.current = null;
-   historyDragBaseline.current = null;
   }
+  historyDragStart.current = null;
+  historyDragBaseline.current = null;
   setHistoryDragRevision(value => value + 1);
  };
  const historyIndex = useRef(-1);
