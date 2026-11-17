@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
+import { parse, stringify } from 'yaml';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const server = spawn('npm', ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { shell: process.platform === 'win32', stdio: 'pipe' });
@@ -104,8 +105,41 @@ try {
   await page.getByRole('button', { name: '再生画面へ戻る' }).click();
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
+  // 既存YAMLの読み込み直後も、負座標・可変サイズのノード群を中心表示する。
+  await page.route('**/scenarios/order-processing.yaml', async route => {
+    const response = await route.fetch();
+    const scenario = parse(await response.text());
+    scenario.actors[0].position = { x: -1800, y: -950 };
+    scenario.actors[0].width = 360;
+    scenario.actors[0].height = 220;
+    scenario.actors[1].position = { x: 1200, y: 750 };
+    scenario.actors[1].width = 180;
+    scenario.actors[1].height = 80;
+    scenario.actors[2].position = { x: -500, y: 250 };
+    scenario.actors[3].position = { x: 300, y: -300 };
+    await route.fulfill({ response, body: stringify(scenario), headers: { ...response.headers(), 'content-type': 'text/yaml' } });
+  });
+  await page.getByRole('button', { name: /ECサイトの注文処理/ }).click();
+  await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  await page.getByRole('button', { name: /フローを編集/ }).click();
+  await page.locator('[data-actor-id]').first().waitFor();
+  const loadedNodes = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => {
+    const rect = element.querySelector('rect').getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  }));
+  const loadedCanvas = await page.locator('.editor-canvas svg').boundingBox();
+  if (!loadedCanvas || loadedNodes.length !== 4) throw new Error('Existing YAML did not load four nodes');
+  const loadedCenter = {
+    x: (Math.min(...loadedNodes.map(node => node.left)) + Math.max(...loadedNodes.map(node => node.right))) / 2,
+    y: (Math.min(...loadedNodes.map(node => node.top)) + Math.max(...loadedNodes.map(node => node.bottom))) / 2,
+  };
+  if (Math.abs(loadedCenter.x - (loadedCanvas.x + loadedCanvas.width / 2)) > 4 ||
+      Math.abs(loadedCenter.y - (loadedCanvas.y + loadedCanvas.height / 2)) > 4) {
+    throw new Error('Initial YAML view is not centered on variable-size negative-coordinate nodes: ' + JSON.stringify({ loadedCenter, loadedCanvas }));
+  }
+
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, negative-coordinate centering, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
