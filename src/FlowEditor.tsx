@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { saveScenarioYaml } from './editor/scenarioPersistence';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { parse, stringify } from 'yaml';
 import { loadTemplateFragment, parseTemplateYaml, type Scenario } from './scenario';
@@ -36,7 +37,6 @@ import { moveWaypoint, waypointMenuState } from './editor/waypointEditing';
 type Actor = Scenario['actors'][number];
 type Step = Scenario['steps'][number];
 type Tool = 'move' | 'connect' | 'multi';
-type FilePicker = { showSaveFilePicker?: (options: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<{ createWritable: () => Promise<{ write: (content: string) => Promise<void>; close: () => Promise<void> }> }> };
 
 // ワールドを広げ、キャンバスのスクロールで横10ノード以上を配置可能にする。
 const WIDTH = 3600;
@@ -502,36 +502,12 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   // 既存編集では開いているシナリオのファイル名を優先する。新規作成だけmetadata.idを使用。
   const filename = editorScenarioFilename(isNew ? undefined : scenarioPath, metadata.id);
   try {
-   if (scenarioPath?.startsWith('/scenarios/native/')) {
-    // 新規作成ではmetadata.idに基づくファイル名を使い、既存ファイルを上書きしない。
-    const creating = isNew && nativeCreatedPath.current === null;
-    const relativePath = nativeCreatedPath.current ?? (isNew
-     ? filename
-     : decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length)));
-    await invoke(creating ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml });
-    if (creating) nativeCreatedPath.current = relativePath;
-    savedSnapshot.current = snapshotAtSave;
-    setMessage(creating ? '選択したフォルダに新しいYAMLを作成しました。' : '選択したフォルダのYAMLを上書き保存しました。');
-    return true;
-   }
-   const picker = (window as Window & FilePicker).showSaveFilePicker;
-   if (picker) {
-    const handle = await picker({ suggestedName: filename, types: [{ description: 'YAML scenario', accept: { 'application/x-yaml': ['.yaml', '.yml'] } }] });
-    const writable = await handle.createWritable();
-    await writable.write(yaml);
-    await writable.close();
-    setMessage('YAMLを保存しました。Web上の元シナリオは自動更新されません。');
-   } else {
-    // 保存ダイアログ非対応ブラウザでは通常のダウンロードを利用する。
-    const url = URL.createObjectURL(new Blob([yaml], { type: 'application/x-yaml' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(url);
-    setMessage('YAMLをダウンロードしました。元シナリオの更新にはファイルの差し替えが必要です。');
-   }
+   const result = await saveScenarioYaml({
+    scenarioPath, isNew, filename, yaml, nativeCreatedPath: nativeCreatedPath.current,
+   });
+   if (result.nativeCreatedPath) nativeCreatedPath.current = result.nativeCreatedPath;
    savedSnapshot.current = snapshotAtSave;
+   setMessage(result.message);
    return true;
   } catch (error) {
    if (error instanceof Error && error.name === 'AbortError') return false;
