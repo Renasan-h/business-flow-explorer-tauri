@@ -246,6 +246,25 @@ try {
   await reversePayload.fill('注文受付結果');
   if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Reverse payload was not restored for YAML save');
 
+  // 再生順の入れ替えは通信IDを保持したままUndo/Redoでき、保存時も順序が維持される。
+  const playbackRows = page.locator('.editor-step-list > div');
+  const playbackTitles = async () => playbackRows.locator('button.selected, button:not([aria-label])').allTextContents();
+  const originalOrder = await playbackTitles();
+  if (originalOrder.length !== 5 || !originalOrder[0].includes('注文受付') || !originalOrder[1].includes('在庫照会')) {
+    throw new Error('Unexpected playback order before reordering: ' + JSON.stringify(originalOrder));
+  }
+  await playbackRows.nth(1).getByRole('button', { name: '上へ' }).click();
+  const reordered = await playbackTitles();
+  if (!reordered[0].includes('在庫照会') || !reordered[1].includes('注文受付')) {
+    throw new Error('Playback order did not move the second step up: ' + JSON.stringify(reordered));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Undo did not restore playback order');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(reordered)) throw new Error('Redo did not restore reordered playback steps');
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Playback order was not restored before YAML save');
+
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
   // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
   // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
@@ -268,6 +287,9 @@ try {
     throw new Error('Downloaded YAML did not preserve negative actor coordinates');
   }
   await page.getByText('YAMLをダウンロードしました。', { exact: false }).waitFor();
+  if (downloadedScenario.steps.map(step => step.id).join(',') !== 'receive,stock,stock-result,pay,done') {
+    throw new Error('YAML save changed playback order after Undo');
+  }
   const bidirectionalStep = downloadedScenario.steps.find(step => step.id === 'receive');
   if (!bidirectionalStep || bidirectionalStep.bidirectional !== true ||
       bidirectionalStep.reverseFrom !== 'order' ||
@@ -301,7 +323,7 @@ try {
 
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, playback order undo/redo and YAML order, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
