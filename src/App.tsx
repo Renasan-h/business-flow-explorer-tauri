@@ -130,29 +130,37 @@ export default function App() {
   }
   setPlaying(true);
  };
- // 等倍表示では座標原点ではなくノード群の中心を画面中央へ合わせる。
- // リサイズ後もPixiJSの論理座標(VIEW_WIDTH/HEIGHT)を基準にする。
- const resetViewport = () => {
-  if (!scenario || scenario.actors.length === 0) { setZoom(1); setPan({ x: 0, y: 0 }); return; }
-  const xs = scenario.actors.map(actor => actor.position.x);
-  const ys = scenario.actors.map(actor => actor.position.y);
-  const centerX = (Math.min(...xs) + Math.max(...xs)) / 2;
-  const centerY = (Math.min(...ys) + Math.max(...ys)) / 2;
-  setZoom(1);
-  setPan({ x: VIEW_WIDTH / 2 - centerX, y: VIEW_HEIGHT / 2 - centerY });
+ // 再生画面もノードの実寸から外接矩形を求め、負座標を含む配置を中央に収める。
+ const scenarioBounds = (actors: Scenario['actors']) => {
+  const left = Math.min(...actors.map(actor => actor.position.x - (actor.width ?? NODE_WIDTH) / 2));
+  const right = Math.max(...actors.map(actor => actor.position.x + (actor.width ?? NODE_WIDTH) / 2));
+  const top = Math.min(...actors.map(actor => actor.position.y - (actor.height ?? NODE_HEIGHT) / 2));
+  const bottom = Math.max(...actors.map(actor => actor.position.y + (actor.height ?? NODE_HEIGHT) / 2));
+  return { left, right, top, bottom };
  };
- // シナリオ切替時には、全Actorが画面に収まる初期表示へ戻す。
- useEffect(() => {
-  if (!scenario) return;
-  const xs = scenario.actors.map(actor => actor.position.x);
-  const ys = scenario.actors.map(actor => actor.position.y);
-  const minX = Math.min(...xs) - NODE_WIDTH / 2 - 40;
-  const maxX = Math.max(...xs) + NODE_WIDTH / 2 + 40;
-  const minY = Math.min(...ys) - NODE_HEIGHT / 2 - 40;
-  const maxY = Math.max(...ys) + NODE_HEIGHT / 2 + 40;
-  const fit = clampZoom(Math.min(1, VIEW_WIDTH / (maxX - minX), VIEW_HEIGHT / (maxY - minY)));
+ const centerPlayback = (fitToScreen: boolean) => {
+  if (!scenario?.actors.length) {
+   setZoom(1);
+   setPan({ x: 0, y: 0 });
+   return;
+  }
+  const bounds = scenarioBounds(scenario.actors);
+  const padding = 40;
+  const fit = fitToScreen ? clampZoom(Math.min(
+   1,
+   VIEW_WIDTH / Math.max(1, bounds.right - bounds.left + padding * 2),
+   VIEW_HEIGHT / Math.max(1, bounds.bottom - bounds.top + padding * 2),
+  )) : 1;
   setZoom(fit);
-  setPan({x: (VIEW_WIDTH - (minX + maxX) * fit) / 2, y: (VIEW_HEIGHT - (minY + maxY) * fit) / 2});
+  setPan({
+   x: VIEW_WIDTH / 2 - (bounds.left + bounds.right) / 2 * fit,
+   y: VIEW_HEIGHT / 2 - (bounds.top + bounds.bottom) / 2 * fit,
+  });
+ };
+ // リセットは等倍で中央表示。シナリオ切替時は全ノードを収める倍率を適用する。
+ const resetViewport = () => centerPlayback(false);
+ useEffect(() => {
+  centerPlayback(true);
  }, [scenario]);
  const current = routes[step];
  // 新規作成は既存シナリオに依存しない空の編集データから開始する。
