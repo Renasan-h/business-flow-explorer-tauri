@@ -265,6 +265,54 @@ try {
   await page.keyboard.press('Control+z');
   if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Playback order was not restored before YAML save');
 
+  // 往路・復路の経由点を独立して追加・解除し、Undo/Redoでも相手側を保持する。
+  const receiveEdge = page.locator('.editor-edge[data-step-id="receive"]');
+  const openReceiveMenu = async () => {
+    await receiveEdge.locator('path').first().click({ button: 'right', force: true });
+    await page.getByRole('menuitem', { name: '往路の経由点を追加' }).waitFor();
+  };
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '往路の経由点を追加' }).click();
+  await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').waitFor();
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '復路の経由点を追加' }).click();
+  await receiveEdge.locator('[data-waypoint-direction="reverse"]').waitFor();
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Undo of reverse waypoint changed forward waypoints');
+  }
+  await page.keyboard.press('Control+y');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Redo did not restore reverse waypoint');
+  }
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '往路の経由点を解除' }).click();
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Removing forward waypoints also removed reverse waypoints');
+  }
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Undo did not restore forward waypoint');
+  }
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '復路の経由点を解除' }).click();
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Removing reverse waypoints also removed forward waypoints');
+  }
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Undo did not restore reverse waypoint after removal');
+  }
+
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
   // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
   // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
@@ -298,6 +346,9 @@ try {
       bidirectionalStep.actions[0].from !== 'customer' ||
       bidirectionalStep.actions[0].to !== 'order') {
     throw new Error('Downloaded YAML lost bidirectional forward/reverse communication settings');
+  }
+  if (bidirectionalStep.waypoints?.length !== 1 || bidirectionalStep.reverseWaypoints?.length !== 1) {
+    throw new Error('YAML save lost independent forward/reverse waypoints');
   }
   // 保存したYAMLを次の読込データとして使用し、エディターで再保存しても往復設定が保持されること。
   savedScenarioForReload = downloadedScenario;
