@@ -183,8 +183,14 @@ try {
   await page.getByRole('button', { name: '保存せず戻る' }).click();
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   // 既存YAMLの読み込み直後も、負座標・可変サイズのノード群を中心表示する。
+  let savedScenarioForReload = null;
   await page.route('**/scenarios/order-processing.yaml', async route => {
-    const scenario = parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
+    const scenario = savedScenarioForReload ?? parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
+    // 往路と復路の設定が保存・再読込を経ても失われないことを検証する。
+    scenario.steps[0].bidirectional = true;
+    scenario.steps[0].reverseFrom = 'order';
+    scenario.steps[0].reverseTo = 'customer';
+    scenario.steps[0].reversePayload = '注文受付結果';
     scenario.actors[0].position = { x: -1800, y: -950 };
     scenario.actors[0].width = 360;
     scenario.actors[0].height = 220;
@@ -238,9 +244,39 @@ try {
     throw new Error('Downloaded YAML did not preserve negative actor coordinates');
   }
   await page.getByText('YAMLをダウンロードしました。', { exact: false }).waitFor();
+  const bidirectionalStep = downloadedScenario.steps.find(step => step.id === 'receive');
+  if (!bidirectionalStep || bidirectionalStep.bidirectional !== true ||
+      bidirectionalStep.reverseFrom !== 'order' ||
+      bidirectionalStep.reverseTo !== 'customer' ||
+      bidirectionalStep.reversePayload !== '注文受付結果' ||
+      bidirectionalStep.actions[0].from !== 'customer' ||
+      bidirectionalStep.actions[0].to !== 'order') {
+    throw new Error('Downloaded YAML lost bidirectional forward/reverse communication settings');
+  }
+  // 保存したYAMLを次の読込データとして使用し、エディターで再保存しても往復設定が保持されること。
+  savedScenarioForReload = downloadedScenario;
+  await page.reload();
+  await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  await page.getByRole('button', { name: /フローを編集/ }).click();
+  await page.locator('[data-actor-id]').first().waitFor();
+  const [roundTripDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'YAMLを保存…' }).click(),
+  ]);
+  const roundTripPath = await roundTripDownload.path();
+  if (!roundTripPath) throw new Error('Re-saved YAML download is missing');
+  const roundTripScenario = parse(await readFile(roundTripPath, 'utf8'));
+  const roundTripStep = roundTripScenario.steps.find(step => step.id === 'receive');
+  if (!roundTripStep || roundTripStep.bidirectional !== true ||
+      roundTripStep.reverseFrom !== 'order' ||
+      roundTripStep.reverseTo !== 'customer' ||
+      roundTripStep.reversePayload !== '注文受付結果') {
+    throw new Error('Bidirectional communication settings changed after YAML reload and save');
+  }
+
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, browser YAML download round trip, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
