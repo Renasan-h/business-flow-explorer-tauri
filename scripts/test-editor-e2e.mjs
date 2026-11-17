@@ -216,8 +216,29 @@ try {
     throw new Error('Initial YAML view is not centered on variable-size negative-coordinate nodes: ' + JSON.stringify({ loadedCenter, loadedCanvas }));
   }
 
+  // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
+  // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'YAMLを保存…' }).click(),
+  ]);
+  if (!/\\.ya?ml$/i.test(download.suggestedFilename())) {
+    throw new Error('Downloaded scenario does not have a YAML filename: ' + download.suggestedFilename());
+  }
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error('Downloaded YAML file is not available');
+  const downloadedScenario = parse(await readFile(downloadedPath, 'utf8'));
+  if (!Array.isArray(downloadedScenario.actors) || downloadedScenario.actors.length !== 4) {
+    throw new Error('Downloaded YAML lost the existing scenario actors');
+  }
+  if (downloadedScenario.actors[0].position.x !== -1800 ||
+      downloadedScenario.actors[0].position.y !== -950) {
+    throw new Error('Downloaded YAML did not preserve negative actor coordinates');
+  }
+  await page.getByText('YAMLをダウンロードしました。', { exact: false }).waitFor();
+
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, browser YAML download round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
