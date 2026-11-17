@@ -117,6 +117,30 @@ try {
       Math.abs(midpoint.y - (canvas.y + canvas.height / 2)) > 3) {
     throw new Error('Reset view did not center the negative/positive actor bounds: ' + JSON.stringify({ midpoint, canvas }));
   }
+  // ウィンドウリサイズ後もSVGのviewBoxと表示サイズを同期し、再センタリングできること。
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.waitForFunction(() => {
+    const svg = document.querySelector('.editor-canvas svg');
+    if (!svg) return false;
+    const rect = svg.getBoundingClientRect();
+    const view = svg.viewBox.baseVal;
+    return Math.abs(view.width - rect.width) < 2 && Math.abs(view.height - rect.height) < 2;
+  });
+  await page.getByRole('button', { name: '表示リセット' }).click();
+  const resizedNodes = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => {
+    const rect = element.querySelector('rect').getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  }));
+  const resizedCanvas = await svg.boundingBox();
+  if (!resizedCanvas) throw new Error('Canvas disappeared after viewport resize');
+  const resizedCenter = {
+    x: (Math.min(...resizedNodes.map(item => item.left)) + Math.max(...resizedNodes.map(item => item.right))) / 2,
+    y: (Math.min(...resizedNodes.map(item => item.top)) + Math.max(...resizedNodes.map(item => item.bottom))) / 2,
+  };
+  if (Math.abs(resizedCenter.x - (resizedCanvas.x + resizedCanvas.width / 2)) > 4 ||
+      Math.abs(resizedCenter.y - (resizedCanvas.y + resizedCanvas.height / 2)) > 4) {
+    throw new Error('Viewport reset failed to center nodes after resize');
+  }
   // 複数選択したノードのドラッグは1件の履歴として確定し、全ノードを同時に復元する。
   await page.getByRole('button', { name: '複数ノード選択・移動' }).click();
   await page.getByRole('button', { name: 'すべて選択' }).click();
@@ -193,7 +217,7 @@ try {
   }
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
