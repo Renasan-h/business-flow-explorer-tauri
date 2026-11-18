@@ -2,18 +2,19 @@ import { invoke } from '@tauri-apps/api/core';
 
 // WebブラウザとTauriの保存経路を分離する。Tauriの保存先は選択済みフォルダ内に限定する。
 type FilePicker = { showSaveFilePicker?: (options: { suggestedName: string; types: { description: string; accept: Record<string, string[]> }[] }) => Promise<{ createWritable: () => Promise<{ write: (content: string) => Promise<void>; close: () => Promise<void> }> }> };
-type SaveOptions = { scenarioPath?: string; isNew: boolean; filename: string; yaml: string; nativeCreatedPath: string | null };
+type SaveOptions = { scenarioPath?: string; isNew: boolean; filename: string; yaml: string; nativeCreatedPath: string | null; expectedContent?: string };
 type SaveResult = { message: string; nativeCreatedPath?: string };
 
 export async function saveScenarioYaml(options: SaveOptions): Promise<SaveResult> {
- const { scenarioPath, isNew, filename, yaml, nativeCreatedPath } = options;
+ const { scenarioPath, isNew, filename, yaml, nativeCreatedPath, expectedContent } = options;
  if (scenarioPath?.startsWith('/scenarios/native/')) {
   // 初回作成後は同じファイルへ更新し、再保存時の重複作成を避ける。
   const creating = isNew && nativeCreatedPath === null;
   const relativePath = nativeCreatedPath ?? (isNew
    ? filename
    : decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length)));
-  await invoke(creating ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml });
+  if (!creating && expectedContent === undefined) throw new Error('保存前のYAML内容を取得できません。開き直してください。');
+  await invoke(creating ? 'create_scenario_file' : 'write_scenario_file', { relativePath, content: yaml, expectedContent });
   return {
    nativeCreatedPath: creating ? relativePath : undefined,
    message: creating ? '選択したフォルダに新しいYAMLを作成しました。' : '選択したフォルダのYAMLを上書き保存しました。',

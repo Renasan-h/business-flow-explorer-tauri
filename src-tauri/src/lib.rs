@@ -127,16 +127,22 @@ fn write_scenario_file(
     state: State<'_, ScenarioRoot>,
     relative_path: String,
     content: String,
+    expected_content: String,
 ) -> Result<(), String> {
     // 既存ファイルのみ更新する。書き込み失敗時に元ファイルを破損させない。
     let target = resolve_existing(&current_root(&state)?, &relative_path)?;
-    replace_yaml(&target, &content)
+    replace_yaml_checked(&target, &content, Some(&expected_content))
 }
 
 // 同じディレクトリの一時ファイルへ書き込み、同期後に置き換える。
 // Windowsではrenameによる既存ファイルの置き換えが失敗する環境もあるため、
 // 元ファイルを退避してから切り替え、失敗した場合は復元する。
+#[cfg(test)]
 fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
+    replace_yaml_checked(target, content, None)
+}
+
+fn replace_yaml_checked(target: &Path, content: &str, expected: Option<&str>) -> Result<(), String> {
     let _guard = YAML_SAVE_LOCK.lock().map_err(|_| "保存処理のロックを取得できません".to_string())?;
     // フォルダをYAMLファイルとして置換すると元フォルダが退避されるため、必ず通常ファイルに限定する。
     // 読み込み後にファイルがシンボリックリンクへ差し替えられても、リンク先を更新しない。
@@ -153,6 +159,14 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
         .permissions();
     if original_permissions.readonly() {
         return Err("読み取り専用のYAMLファイルは上書きできません".into());
+    }
+    // 直列化ロック内で比較し、外部変更を黙って上書きしない。
+    if let Some(expected) = expected {
+        let current = fs::read_to_string(target)
+            .map_err(|error| format!("保存先を再確認できません: {error}"))?;
+        if current != expected {
+            return Err("保存競合: 外部でYAMLが変更されています。再読み込みしてください".into());
+        }
     }
     let parent = target.parent().ok_or("保存先が不正です")?;
     let name = target.file_name().ok_or("ファイル名が不正です")?.to_string_lossy();

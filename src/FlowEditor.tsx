@@ -466,6 +466,12 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  };
  // 新規YAMLの初回作成先を保持し、2回目以降は同じファイルを安全に更新する。
  const nativeCreatedPath = useRef<string | null>(null);
+ // 編集開始時のYAML原文を保持し、保存時の外部変更を検出する。
+ const nativeOriginal = useRef<Promise<string> | null>(null);
+ if (nativeOriginal.current === null && scenarioPath?.startsWith('/scenarios/native/') && !(initial.actors.length === 0 && initial.steps.length === 0)) {
+  const relativePath = decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
+  nativeOriginal.current = invoke<string>('read_scenario_file', { relativePath });
+ }
  /** 入力検証後にYAMLを書き出す。GitHubやシナリオ一覧の自動更新は行わない。 */
  const save = async (): Promise<boolean> => {
   // 保存ダイアログ表示中の状態変化に左右されないよう、保存対象を固定する。
@@ -502,10 +508,12 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   // 既存編集では開いているシナリオのファイル名を優先する。新規作成だけmetadata.idを使用。
   const filename = editorScenarioFilename(isNew ? undefined : scenarioPath, metadata.id);
   try {
+   const expectedContent = nativeOriginal.current ? await nativeOriginal.current : undefined;
    const result = await saveScenarioYaml({
-    scenarioPath, isNew, filename, yaml, nativeCreatedPath: nativeCreatedPath.current,
+    scenarioPath, isNew, filename, yaml, nativeCreatedPath: nativeCreatedPath.current, expectedContent,
    });
    if (result.nativeCreatedPath) nativeCreatedPath.current = result.nativeCreatedPath;
+   if (scenarioPath?.startsWith('/scenarios/native/')) nativeOriginal.current = Promise.resolve(yaml);
    savedSnapshot.current = snapshotAtSave;
    setMessage(result.message);
    return true;
