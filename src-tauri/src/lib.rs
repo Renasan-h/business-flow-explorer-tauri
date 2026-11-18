@@ -14,6 +14,11 @@ use tauri_plugin_dialog::DialogExt;
 struct ScenarioRoot(Mutex<Option<PathBuf>>);
 
 fn validate_relative_path(relative: &str) -> Result<&Path, String> {
+    // フロントエンドの相対パスは常に '/' 区切り。OSによる解釈差をなくす。
+    // Windowsでドライブ/ストリーム指定になる ':' と、別の区切り文字 '\\' を拒否する。
+    if relative.contains(['\\\\', ':']) {
+        return Err("相対パスには '/' 区切りを使用してください".into());
+    }
     let path = Path::new(relative);
     if path.as_os_str().is_empty()
         || path.is_absolute()
@@ -232,6 +237,9 @@ mod tests {
     #[test]
     fn rejects_unsafe_paths() {
         for path in ["", "../secret.yaml", "/tmp/secret.yaml", "dir/../secret.yml", "data.json"] {
+            assert!(validate_relative_path(path).is_err(), "{path}");
+        }
+        for path in [r"nested\\..\\escape.yaml", r"C:\\temp\\scenario.yaml", "file.yaml:stream"] {
             assert!(validate_relative_path(path).is_err(), "{path}");
         }
         assert!(validate_relative_path("nested/scenario.yaml").is_ok());
