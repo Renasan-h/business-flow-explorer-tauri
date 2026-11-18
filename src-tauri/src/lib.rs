@@ -26,6 +26,23 @@ fn validate_relative_path(relative: &str) -> Result<&Path, String> {
     {
         return Err("相対パスを指定してください".into());
     }
+    // Windowsでは末尾の空白・ピリオドが正規化され、別名のファイルを指す可能性がある。
+    // CON / NUL / COM1 などの予約デバイス名は拡張子付きでも禁止する。
+    for component in path.components() {
+        let Component::Normal(name) = component else { continue };
+        let name = name.to_string_lossy();
+        if name.ends_with([' ', '.']) || name.chars().any(|ch| ch.is_control()) {
+            return Err("Windowsで不正なファイル名です".into());
+        }
+        let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ').to_ascii_uppercase();
+        let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+            || (stem.len() == 4
+                && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                && matches!(stem.as_bytes()[3], b'1'..=b'9'));
+        if reserved {
+            return Err("Windowsの予約デバイス名は使用できません".into());
+        }
+    }
     let extension = path.extension().and_then(|value| value.to_str()).unwrap_or("");
     if !matches!(extension.to_ascii_lowercase().as_str(), "yaml" | "yml") {
         return Err("YAMLファイルのみ操作できます".into());
@@ -242,6 +259,13 @@ mod tests {
         for path in [r"nested\\..\\escape.yaml", r"C:\\temp\\scenario.yaml", "file.yaml:stream"] {
             assert!(validate_relative_path(path).is_err(), "{path}");
         }
+        for path in ["CON.yaml", "nested/nul.yml", "COM1.yaml", "LPT9.yml",
+                     "folder./scenario.yaml", "folder /scenario.yaml", "file.yaml.",
+                     "scenario.yaml ", "folder/aux.yaml"] {
+            assert!(validate_relative_path(path).is_err(), "{path}");
+        }
+        assert!(validate_relative_path("computer.yaml").is_ok());
+        assert!(validate_relative_path("nested/com10.yaml").is_ok());
         assert!(validate_relative_path("nested/scenario.yaml").is_ok());
     }
 
