@@ -95,7 +95,34 @@ export default function App() {
    .catch(error => { if (!cancelled) setError(String(error)); });
   return () => { cancelled = true; };
  }, [scenarioReload, activeRoot, nativeFolder]);
- useEffect(() => { if (!selected) { setScenario(null); return; } setSelectedActorId(null); setSelectedInterfaceId(null); setPlaying(false); setFinished(false); setStep(0); setBranchChoices({}); loadScenario(selected).then(s => { setScenario(s); setError(''); }).catch(e => setError(String(e))); }, [selected, scenarioReload]);
+ // 非同期読み込み中に別のシナリオへ切り替えた場合、古い結果で画面を上書きしない。
+ useEffect(() => {
+  let cancelled = false;
+  if (!selected) {
+   setScenario(null);
+   return () => { cancelled = true; };
+  }
+  setSelectedActorId(null);
+  setSelectedInterfaceId(null);
+  setPlaying(false);
+  setFinished(false);
+  setStep(0);
+  setBranchChoices({});
+  // 前のシナリオの編集ボタンや内容を、読み込み完了まで表示しない。
+  setScenario(null);
+  loadScenario(selected)
+   .then(loaded => {
+    if (cancelled) return;
+    setScenario(loaded);
+    setError('');
+   })
+   .catch(error => {
+    if (cancelled) return;
+    setScenario(null);
+    setError(String(error));
+   });
+  return () => { cancelled = true; };
+ }, [selected, scenarioReload]);
  // 最終ステップの完了時は停止し、再生ボタンを押すまで先頭へ戻さない。
  const [finished, setFinished] = useState(false);
  const routes = scenario ? playbackSteps(scenario.actors, scenario.steps, branchChoices) : [];
