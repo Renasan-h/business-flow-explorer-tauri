@@ -144,10 +144,18 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
             Err(error) => return Err(format!("一時ファイルを作成できません: {error}")),
         }
     };
-    if let Err(error) = file.write_all(content.as_bytes()).and_then(|_| file.sync_all()) {
+    // 一時ファイルを置き換えた後も、元のYAMLのアクセス権を維持する。
+    // 新規作成時の既定権限のまま置換すると、共有設定やUnixのモードが変化する。
+    let original_permissions = fs::metadata(target)
+        .map_err(|error| format!("保存先の属性を取得できません: {error}"))?
+        .permissions();
+    if let Err(error) = file.write_all(content.as_bytes())
+        .and_then(|_| file.set_permissions(original_permissions))
+        .and_then(|_| file.sync_all())
+    {
         drop(file);
         let _ = fs::remove_file(&temp);
-        return Err(format!("一時ファイルへの書き込みに失敗しました: {error}"));
+        return Err(format!("一時ファイルへの書き込みまたは権限設定に失敗しました: {error}"));
     }
     drop(file);
     // 元ファイルのパスを直接変更せず、同一ボリューム内で切り替える。
@@ -297,6 +305,22 @@ mod tests {
         let leftovers = fs::read_dir(&root).unwrap().filter_map(Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
         assert_eq!(leftovers, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replacement_preserves_existing_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = std::env::temp_dir().join(format!("bfe-permissions-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        fs::write(&target, "before").unwrap();
+        fs::set_permissions(&target, fs::Permissions::from_mode(0o640)).unwrap();
+        replace_yaml(&target, "after").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "after");
+        assert_eq!(fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o640);
         fs::remove_dir_all(root).unwrap();
     }
 
