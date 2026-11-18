@@ -16,7 +16,7 @@ struct ScenarioRoot(Mutex<Option<PathBuf>>);
 fn validate_relative_path(relative: &str) -> Result<&Path, String> {
     // フロントエンドの相対パスは常に '/' 区切り。OSによる解釈差をなくす。
     // Windowsでドライブ/ストリーム指定になる ':' と、別の区切り文字 '\\' を拒否する。
-    if relative.contains(['\\\\', ':']) {
+    if relative.contains(['\\', ':']) {
         return Err("相対パスには '/' 区切りを使用してください".into());
     }
     let path = Path::new(relative);
