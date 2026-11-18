@@ -126,9 +126,10 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
         return Err("保存先のYAMLファイルが存在しないか、通常ファイルではありません".into());
     }
     // 一時ファイルのrenameは読み取り専用属性を回避できるため、明示的に更新を拒否する。
-    if fs::metadata(target).map_err(|error| format!("保存先の属性を取得できません: {error}"))?
-        .permissions().readonly()
-    {
+    let original_permissions = fs::metadata(target)
+        .map_err(|error| format!("保存先の属性を取得できません: {error}"))?
+        .permissions();
+    if original_permissions.readonly() {
         return Err("読み取り専用のYAMLファイルは上書きできません".into());
     }
     let parent = target.parent().ok_or("保存先が不正です")?;
@@ -146,9 +147,6 @@ fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
     };
     // 一時ファイルを置き換えた後も、元のYAMLのアクセス権を維持する。
     // 新規作成時の既定権限のまま置換すると、共有設定やUnixのモードが変化する。
-    let original_permissions = fs::metadata(target)
-        .map_err(|error| format!("保存先の属性を取得できません: {error}"))?
-        .permissions();
     if let Err(error) = file.write_all(content.as_bytes())
         .and_then(|_| file.set_permissions(original_permissions))
         .and_then(|_| file.sync_all())
