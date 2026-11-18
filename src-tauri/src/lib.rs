@@ -117,7 +117,12 @@ fn write_scenario_file(
 fn replace_yaml(target: &Path, content: &str) -> Result<(), String> {
     let _guard = YAML_SAVE_LOCK.lock().map_err(|_| "保存処理のロックを取得できません".to_string())?;
     // フォルダをYAMLファイルとして置換すると元フォルダが退避されるため、必ず通常ファイルに限定する。
-    if !target.is_file() {
+    // 読み込み後にファイルがシンボリックリンクへ差し替えられても、リンク先を更新しない。
+    // metadata/is_file はリンクを辿るため、symlink_metadata で実体の種類を確認する。
+    let target_kind = fs::symlink_metadata(target)
+        .map_err(|error| format!("保存先の属性を取得できません: {error}"))?
+        .file_type();
+    if !target_kind.is_file() || target_kind.is_symlink() {
         return Err("保存先のYAMLファイルが存在しないか、通常ファイルではありません".into());
     }
     // 一時ファイルのrenameは読み取り専用属性を回避できるため、明示的に更新を拒否する。
@@ -292,6 +297,23 @@ mod tests {
         let leftovers = fs::read_dir(&root).unwrap().filter_map(Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
         assert_eq!(leftovers, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    // 読み込み後のファイル差し替えによるリンク先への誤保存を防ぐ。
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_target_during_save() {
+        let root = std::env::temp_dir().join(format!("bfe-save-link-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let outside = root.join("original.yaml");
+        let link = root.join("linked.yaml");
+        fs::write(&outside, "original").unwrap();
+        std::os::unix::fs::symlink(&outside, &link).unwrap();
+        assert!(replace_yaml(&link, "changed").is_err());
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "original");
+        assert!(fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
         fs::remove_dir_all(root).unwrap();
     }
 
