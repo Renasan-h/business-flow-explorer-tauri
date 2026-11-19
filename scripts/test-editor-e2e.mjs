@@ -193,6 +193,24 @@ try {
         parse(result.content).steps.length !== 1) {
       throw new Error('Existing empty YAML was not updated with its original content');
     }
+    // 編集開始後の外部更新を模擬し、競合時に内容と比較基準が上書きされないことを検証する。
+    const externalRevision = result.content + '# externally updated\\n';
+    await emptyPage.evaluate(content => {
+      window.__emptyExistingTest.files.set('empty-existing.yaml', content);
+    }, externalRevision);
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
+    // 失敗後の再試行も古い比較基準を使い、外部変更を上書きしてはいけない。
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
+    const conflict = await emptyPage.evaluate(() => {
+      const { files, calls } = window.__emptyExistingTest;
+      return { content: files.get('empty-existing.yaml'), calls };
+    });
+    if (conflict.content !== externalRevision || conflict.calls.length !== 1) {
+      throw new Error('Save conflict overwrote external YAML or incorrectly advanced the saved revision');
+    }
   } finally {
     await emptyPage.close();
   }
