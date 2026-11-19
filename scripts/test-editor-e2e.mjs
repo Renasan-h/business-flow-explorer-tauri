@@ -18,6 +18,55 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:4179/');
+  // Tauri保存APIをブラウザ上で模擬し、新規作成→再保存→外部競合を検証する。
+  // 画面操作のテストとは別に、エディターが利用する保存経路の契約を確認する。
+  await page.evaluate(async () => {
+    const previous = window.__TAURI_INTERNALS__;
+    const files = new Map();
+    const calls = [];
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args) => {
+        calls.push({ command, ...args });
+        if (command === 'create_scenario_file') {
+          if (files.has(args.relativePath)) throw new Error('既存ファイル');
+          files.set(args.relativePath, args.content);
+        } else if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+        } else {
+          throw new Error('Unexpected Tauri command: ' + command);
+        }
+      },
+    };
+    try {
+      const { saveScenarioYaml } = await import('/src/editor/scenarioPersistence.ts');
+      const options = { scenarioPath: '/scenarios/native/new-flow.yaml', isNew: true, filename: 'new-flow.yaml' };
+      const first = 'metadata: first\\n';
+      const second = 'metadata: second\\n';
+      const created = await saveScenarioYaml({ ...options, yaml: first, nativeCreatedPath: null });
+      if (created.nativeCreatedPath !== 'new-flow.yaml') throw new Error('Initial save did not return created path');
+      await saveScenarioYaml({ ...options, yaml: second, nativeCreatedPath: created.nativeCreatedPath, expectedContent: first });
+      if (files.get('new-flow.yaml') !== second) throw new Error('Second save did not update the created file');
+      if (calls.length !== 2 || calls[0].command !== 'create_scenario_file' ||
+          calls[1].command !== 'write_scenario_file' || calls[1].expectedContent !== first) {
+        throw new Error('New-file save did not switch to checked update');
+      }
+      // 外部アプリによる変更後は、古い原文での再保存を拒否する。
+      files.set('new-flow.yaml', 'metadata: external\\n');
+      let conflicted = false;
+      try {
+        await saveScenarioYaml({ ...options, yaml: 'metadata: editor\\n', nativeCreatedPath: created.nativeCreatedPath, expectedContent: second });
+      } catch (error) {
+        conflicted = String(error).includes('保存競合');
+      }
+      if (!conflicted || files.get('new-flow.yaml') !== 'metadata: external\\n') {
+        throw new Error('External modification was overwritten');
+      }
+    } finally {
+      window.__TAURI_INTERNALS__ = previous;
+    }
+  });
+
   await page.getByRole('button', { name: /新規/ }).first().click();
   await page.getByRole('button', { name: '＋ ノード追加' }).click();
   // Undo/Redo はノード追加を戻し、やり直しで同じノードを復元する。
