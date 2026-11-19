@@ -1,11 +1,7 @@
 name: Rust compile check
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src-tauri/**'
-      - '.github/workflows/rust-check.yml'
+  # PR作成・更新では起動せず、必要なときだけ手動実行する。
   workflow_dispatch:
 
 permissions:
