@@ -67,6 +67,73 @@ try {
     }
   });
 
+  // 実際の編集画面で新規作成→初回保存→編集→再保存を検証する。
+  // Tauriコマンドのみモックし、ボタン・ノード・接続線は実画面で操作する。
+  const nativePage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await nativePage.addInitScript(() => {
+    const files = new Map();
+    const calls = [];
+    window.__nativeSaveTest = { files, calls };
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'E2E test folder';
+        if (command === 'list_scenario_files') return [];
+        if (command === 'create_scenario_file') {
+          if (files.has(args.relativePath)) throw new Error('既存ファイル');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        throw new Error('Unexpected native command: ' + command);
+      },
+    };
+  });
+  try {
+    await nativePage.goto('http://127.0.0.1:4179/');
+    await nativePage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await nativePage.getByRole('button', { name: /新規/ }).first().click();
+    await nativePage.getByRole('heading', { name: '新規フロー作成' }).waitFor();
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    const actors = nativePage.locator('[data-actor-id]');
+    if (await actors.count() !== 2) throw new Error('Native editor did not create two nodes');
+    const handle = nativePage.locator('[data-connection-handle]').first();
+    const source = await handle.boundingBox();
+    const destination = await actors.last().locator('rect').first().boundingBox();
+    if (!source || !destination) throw new Error('Connection handles are not visible');
+    await nativePage.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await nativePage.mouse.down();
+    await nativePage.mouse.move(destination.x + destination.width / 2, destination.y + destination.height / 2, { steps: 12 });
+    await nativePage.mouse.up();
+    await nativePage.getByText('通信線を追加しました。').waitFor();
+    await nativePage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await nativePage.getByText('選択したフォルダに新しいYAMLを作成しました。').waitFor();
+    // 保存後にノードを追加してから再保存し、初回の原文が渡されることを確認する。
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await nativePage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await nativePage.getByText('選択したフォルダのYAMLを上書き保存しました。').waitFor();
+    const saved = await nativePage.evaluate(() => {
+      const { files, calls } = window.__nativeSaveTest;
+      return { calls, content: files.get(calls[0]?.relativePath) };
+    });
+    if (saved.calls.length !== 2 ||
+        saved.calls[0].command !== 'create_scenario_file' ||
+        saved.calls[1].command !== 'write_scenario_file' ||
+        saved.calls[1].relativePath !== saved.calls[0].relativePath ||
+        saved.calls[1].expectedContent !== saved.calls[0].content ||
+        saved.content !== saved.calls[1].content ||
+        parse(saved.content).actors.length !== 3) {
+      throw new Error('Native editor did not update the newly created YAML with its original revision');
+    }
+  } finally {
+    await nativePage.close();
+  }
   await page.getByRole('button', { name: /新規/ }).first().click();
   await page.getByRole('button', { name: '＋ ノード追加' }).click();
   // Undo/Redo はノード追加を戻し、やり直しで同じノードを復元する。
