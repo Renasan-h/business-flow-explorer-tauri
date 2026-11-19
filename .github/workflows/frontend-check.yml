@@ -1,17 +1,7 @@
 name: Frontend checks
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'scripts/generate-scenario-manifest.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig*.json'
-      - 'vite.config.*'
-      - '.github/workflows/frontend-check.yml'
+  # PR作成・更新では起動せず、必要なときだけ手動実行する。
   workflow_dispatch:
 
 permissions:
