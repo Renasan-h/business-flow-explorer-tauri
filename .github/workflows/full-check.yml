@@ -1,8 +1,7 @@
 name: Full development checks
 
 on:
-  push:
-    branches: [develop_tauri, main]
+  # 無料枠節約のためpush時には起動しない。Actions画面から手動実行する。
   workflow_dispatch:
 
 permissions:
