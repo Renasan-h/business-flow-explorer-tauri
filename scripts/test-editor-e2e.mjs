@@ -136,6 +136,66 @@ try {
   } finally {
     await nativePage.close();
   }
+  // 空の既存YAMLは新規作成ではなく既存編集として開き、原文付きで上書きする。
+  const emptyPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const originalEmpty = stringify({
+    schemaVersion: '1.0',
+    metadata: { id: 'empty-existing', title: '空の既存フロー', description: '', category: 'custom' },
+    actors: [],
+    steps: [],
+  });
+  await emptyPage.addInitScript(content => {
+    const files = new Map([['empty-existing.yaml', content]]);
+    const calls = [];
+    window.__emptyExistingTest = { files, calls };
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'E2E existing folder';
+        if (command === 'list_scenario_files') return [...files.keys()];
+        if (command === 'read_scenario_file') return files.get(args.relativePath);
+        if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        if (command === 'create_scenario_file') throw new Error('既存YAMLを新規作成してはいけません');
+        throw new Error('Unexpected native command: ' + command);
+      },
+    };
+  }, originalEmpty);
+  try {
+    await emptyPage.goto('http://127.0.0.1:4179/');
+    await emptyPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await emptyPage.getByRole('button', { name: '✎ フローを編集' }).waitFor();
+    await emptyPage.getByRole('button', { name: '✎ フローを編集' }).click();
+    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor();
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByLabel('X', { exact: true }).fill('300');
+    const emptyActors = emptyPage.locator('[data-actor-id]');
+    const emptyHandle = await emptyPage.locator('[data-connection-handle]').first().boundingBox();
+    const emptyDestination = await emptyActors.last().locator('rect').first().boundingBox();
+    if (!emptyHandle || !emptyDestination) throw new Error('Existing scenario connection handles are missing');
+    await emptyPage.mouse.move(emptyHandle.x + emptyHandle.width / 2, emptyHandle.y + emptyHandle.height / 2);
+    await emptyPage.mouse.down();
+    await emptyPage.mouse.move(emptyDestination.x + emptyDestination.width / 2, emptyDestination.y + emptyDestination.height / 2, { steps: 12 });
+    await emptyPage.mouse.up();
+    await emptyPage.getByText('通信線を追加しました。').waitFor();
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('選択したフォルダのYAMLを上書き保存しました。').waitFor();
+    const result = await emptyPage.evaluate(() => {
+      const { files, calls } = window.__emptyExistingTest;
+      return { calls, content: files.get('empty-existing.yaml') };
+    });
+    if (result.calls.length !== 1 || result.calls[0].command !== 'write_scenario_file' ||
+        result.calls[0].expectedContent !== originalEmpty || parse(result.content).actors.length !== 2 ||
+        parse(result.content).steps.length !== 1) {
+      throw new Error('Existing empty YAML was not updated with its original content');
+    }
+  } finally {
+    await emptyPage.close();
+  }
   await page.getByRole('button', { name: /新規/ }).first().click();
   await page.getByRole('button', { name: '＋ ノード追加' }).click();
   // Undo/Redo はノード追加を戻し、やり直しで同じノードを復元する。
