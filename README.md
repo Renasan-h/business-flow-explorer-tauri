@@ -4,6 +4,26 @@
 
 Webシステムのリクエスト処理、API連携、データベースアクセス、外部システムとの連携などを、ノードと通信線で表現できます。フローの定義はYAML形式で管理します。
 
+## 画面イメージ
+
+以下はWeb版で撮影された参考画面です。Tauri版は同じフロー表示・編集機能をベースにしていますが、ウィンドウや操作UIには差異が生じる場合があります。
+
+### Technicalモード
+
+![Technicalモードでフローを表示した画面（Web版参考）](docs/images/technical.png)
+
+### Illustrationモード
+
+![Illustrationモードでフローを表示した画面（Web版参考）](docs/images/illustration.png)
+
+### フローエディター
+
+![ノードと通信線を編集する画面（Web版参考）](docs/images/editor.png)
+
+### 編集内容のプレビュー
+
+![編集中のフローを再生して確認する画面（Web版参考）](docs/images/preview.png)
+
 ## 主な機能
 
 ### フローの作成・編集
