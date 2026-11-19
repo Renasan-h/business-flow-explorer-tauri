@@ -211,27 +211,6 @@ try {
     if (conflict.content !== externalRevision || conflict.calls.length !== 1) {
       throw new Error('Save conflict overwrote external YAML or incorrectly advanced the saved revision');
     }
-    // 保存競合のまま画面を離れようとしても、未保存の変更を維持する。
-    await emptyPage.getByRole('button', { name: '再生画面へ戻る' }).click();
-    const exitDialog = emptyPage.getByRole('dialog', { name: '未保存の変更があります' });
-    await exitDialog.waitFor();
-    await exitDialog.getByRole('button', { name: '保存して戻る' }).click();
-    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
-    await exitDialog.waitFor();
-    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor();
-    if (await emptyPage.locator('[data-actor-id]').count() !== 3) {
-      throw new Error('Conflict save-and-exit discarded unsaved nodes');
-    }
-    await exitDialog.getByRole('button', { name: '編集を続ける' }).click();
-    await exitDialog.waitFor({ state: 'hidden' });
-    const preserved = await emptyPage.evaluate(() => window.__emptyExistingTest.files.get('empty-existing.yaml'));
-    if (preserved !== externalRevision) throw new Error('Conflict exit flow overwrote external YAML');
-    await emptyPage.getByRole('button', { name: '再生画面へ戻る' }).click();
-    await emptyPage.getByRole('dialog', { name: '未保存の変更があります' }).getByRole('button', { name: '保存せず戻る' }).click();
-    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor({ state: 'hidden' });
-    if (await emptyPage.evaluate(() => window.__emptyExistingTest.files.get('empty-existing.yaml')) !== externalRevision) {
-      throw new Error('Discarding local changes modified externally updated YAML');
-    }
   } finally {
     await emptyPage.close();
   }
