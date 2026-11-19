@@ -42,7 +42,7 @@ npm run build
 
 NSISインストーラー：`src-tauri/target/release/bundle/nsis/`。
 
-`Full development checks` は `develop_tauri` のpush時に、フロントエンドビルド、マニフェスト検証、Chromium E2E、アイコン検証、Rustテスト・チェック、Windowsビルド、配布物の存在確認、開発用Artifactアップロードを行います。 `main` ではWebラッパーの準備・ビルド経路が使用されます。
+`Full development checks` はActions画面から `develop_tauri` を指定して手動実行した場合に、フロントエンドビルド、マニフェスト検証、Chromium E2E、アイコン検証、Rustテスト・チェック、Windowsビルド、配布物の存在確認、開発用Artifactアップロードを行います。 `main` ではWebラッパーの準備・ビルド経路が使用されます。
 
 正式配布は `Tauri Windows release build` を `main` で手動実行します。 `release_ref` には `main` に含まれるSHAまたはタグを指定します。Artifact名：
 
@@ -51,13 +51,21 @@ NSISインストーラー：`src-tauri/target/release/bundle/nsis/`。
 
 開発用Artifact：`business-flow-explorer-dev-windows`。ZIPは実行ファイルを圧縮したもので、設定・データの完全な持ち運びを保証しません。
 
+## CIの手動実行
+
+無料枠節約のため、`Full development checks`、`Frontend checks`、`Rust unit tests`、`Rust compile check`、`Tauri Windows release build` はすべて `workflow_dispatch` のみで起動します。pushやPull Requestでは自動実行されません。
+
+GitHubのリポジトリ → **Actions** → ワークフロー選択 → **Run workflow** → 対象ブランチを選択 → **Run workflow** を押してください。リリースワークフローは `main` を選択し、`release_ref` を指定します。
+
+**手動起動に変更しても、請求・利用上限によるGitHub Actionsの起動制限は解除されません。**
+
 ## CIの判定ルール
 
 1. 対象コミットのSHAとワークフロー実行番号を記録します。
 2. ジョブが**実際に開始されたか**確認します。
 3. 開始後に失敗した場合のみ、失敗ステップとログを確認してコードや環境の原因を切り分けます。
 4. **GitHubの請求・支払い・利用上限によりジョブが開始されない場合は「未検証」** と扱います。コード不具合とは断定しません。
-5. ジョブの `success` を確認してから次の変更へ進みます。過去の別コミットの成功を流用しません。
+5. 手動で実行したジョブの `success` を確認します。未実行のコミットは「CI未検証」と明記し、過去の別コミットの成功を流用しません。
 
 CIで成功してもWindows実機でのGUI操作・保存・再起動・Portable ZIP起動をすべて保証するわけではありません。
 
