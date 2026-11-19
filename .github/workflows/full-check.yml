@@ -48,6 +48,8 @@ jobs:
         run: node scripts/test-editor-e2e.mjs
       - name: Generate Windows icon
         run: node scripts/generate-icon.mjs
+      - name: Verify Windows application icons
+        run: node scripts/verify-icon.mjs
       - name: Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Rust compile check
