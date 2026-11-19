@@ -55,7 +55,7 @@ metadata:
 actors:
   - id: web
     name: Web
-    type: web
+    type: browser
     position: { x: 0, y: 0 }
   - id: api
     name: API
