@@ -198,9 +198,9 @@ export default function App() {
    actors: [],
    steps: [],
   };
-  return <FlowEditor key={"new-flow-" + activeRoot} initial={blank} scenarioPath={"/scenarios/" + activeRoot + "/new-flow.yaml"} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
+  return <FlowEditor key={"new-flow-" + activeRoot} createNew initial={blank} scenarioPath={"/scenarios/" + activeRoot + "/new-flow.yaml"} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  }
- if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} initial={scenario} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
+ if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} createNew={false} initial={scenario} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  return <div className="app">
   <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()}>📁 ローカルのシナリオフォルダを開く</button></div>
   <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>

@@ -46,7 +46,9 @@ const NODE_HEIGHT = 76;
 
 /** 編集画面は初期データをコピーして保持する。通常再生データは直接変更しない。 */
 /** 編集結果を単一ファイルのシナリオとして出力し、ファイル参照の解決を不要にする。 */
-export default function FlowEditor({ initial, onClose, scenarioPath }: { initial: Scenario; onClose: () => void; scenarioPath?: string }) {
+export default function FlowEditor({ initial, onClose, scenarioPath, createNew }: { initial: Scenario; onClose: () => void; scenarioPath?: string; createNew?: boolean }) {
+ // 新規作成か既存編集かはノード数ではなく呼び出し元のモードで判定する。
+ const isNew = createNew ?? (initial.actors.length === 0 && initial.steps.length === 0);
  // actors:ノード、steps:通信と再生順。steps配列の並び替えが再生順の変更となる。
  const [actors, setActors] = useState<Actor[]>(() => initial.actors.map(actor => ({ ...actor, position: { ...actor.position } })));
  const [steps, setSteps] = useState<Step[]>(() => initial.steps.map(step => ({ ...step, actions: step.actions.map(action => ({ ...action })) })));
@@ -468,7 +470,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
  const nativeCreatedPath = useRef<string | null>(null);
  // 編集開始時のYAML原文を保持し、保存時の外部変更を検出する。
  const nativeOriginal = useRef<Promise<string> | null>(null);
- if (nativeOriginal.current === null && scenarioPath?.startsWith('/scenarios/native/') && !(initial.actors.length === 0 && initial.steps.length === 0)) {
+ if (nativeOriginal.current === null && scenarioPath?.startsWith('/scenarios/native/') && !isNew) {
   const relativePath = decodeURIComponent(scenarioPath.slice('/scenarios/native/'.length));
   nativeOriginal.current = invoke<string>('read_scenario_file', { relativePath });
  }
@@ -690,7 +692,6 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
   if (orderSource !== id) moveOrder(orderSource, id);
   setOrderSource(null);
  };
- const isNew = initial.actors.length === 0 && initial.steps.length === 0;
  useEffect(() => { setMessage(''); }, [tool]);
  // プレビューに編集中の状態を渡す。戻っても編集中の変更は保持される。
  if (preview) return <FlowPreview actors={actors} steps={steps} interfaces={interfaces} title={metadata.title} onDeleteStep={deleteStep} onExit={requestExit} onClose={() => setPreview(false)}/>;
