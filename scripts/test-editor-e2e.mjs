@@ -103,6 +103,8 @@ try {
     await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
     const actors = nativePage.locator('[data-actor-id]');
     if (await actors.count() !== 2) throw new Error('Native editor did not create two nodes');
+    // 新規ノードは同じキャンバス中心に生成されるため、接続前に2件目を移動する。
+    await nativePage.getByLabel('X', { exact: true }).fill('300');
     const handle = nativePage.locator('[data-connection-handle]').first();
     const source = await handle.boundingBox();
     const destination = await actors.last().locator('rect').first().boundingBox();
