@@ -655,6 +655,43 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_editors_cannot_overwrite_first_successful_save() {
+        let root = std::env::temp_dir().join(format!("bfe-concurrent-editors-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        let original = "metadata: original\n";
+        let first_edit = "metadata: editor A\n";
+        let second_edit = "metadata: editor B\n";
+        fs::write(&target, original).unwrap();
+
+        // 両方のエディターが同じ原文を読み込んだ状態で保存を開始する。
+        let first_target = target.clone();
+        let second_target = target.clone();
+        let first = std::thread::spawn(move || {
+            replace_yaml_checked(&first_target, first_edit, Some(original))
+        });
+        let second = std::thread::spawn(move || {
+            replace_yaml_checked(&second_target, second_edit, Some(original))
+        });
+        let first_result = first.join().unwrap();
+        let second_result = second.join().unwrap();
+
+        // 保存は必ず一方のみ成功し、もう一方は競合として拒否される。
+        assert_ne!(first_result.is_ok(), second_result.is_ok());
+        let winner = if first_result.is_ok() { first_edit } else { second_edit };
+        let loser_error = if first_result.is_err() {
+            first_result.unwrap_err()
+        } else {
+            second_result.unwrap_err()
+        };
+        assert!(loser_error.contains("保存競合"), "{loser_error}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), winner);
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn failed_update_preserves_original_and_cleans_temp_files() {
         let root = std::env::temp_dir().join(format!("bfe-save-failure-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
