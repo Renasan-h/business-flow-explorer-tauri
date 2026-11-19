@@ -1,58 +1,82 @@
-# Business Flow Explorer — Tauri版
+# Business Flow Explorer — Windowsデスクトップ版（Tauri）
 
-[Web版](https://github.com/Renasan-h/business-flow-explorer)をTauri 2でWindowsデスクトップアプリとして起動するための独立したリポジトリです。
+業務システムのノード・通信・処理順序を **YAMLで管理し、編集・可視化・再生する** Windowsデスクトップアプリです。React / TypeScript / ViteとTauri 2 / Rustで構成します。
 
-## 構成
+- [操作ガイド](docs/user-guide.md)
+- [開発・保守ガイド](docs/development.md)
+- [Web版リポジトリ](https://github.com/Renasan-h/business-flow-explorer)（別管理）
 
-- `src/`：Web版から取り込んだReactソース（Tauri版で独立管理）
-- `src-tauri/`：Tauri 2 / Rustアプリ
-- `.github/workflows/full-check.yml`：`develop_tauri` / `main` のpush時にフロントエンドとRustを一括検証
-- `.github/workflows/frontend-check.yml`：TypeScriptとWebビルドの検証
-- `.github/workflows/rust-test.yml`：Rustユニットテスト
-- `.github/workflows/rust-check.yml`：Rustコンパイル検証
-- `.github/workflows/release.yml`：リリース時のみ実行するWindowsインストーラー・Portable ZIP生成
+> **検証状況**：ブラウザ上の編集E2EとRustテストを含むCIの成功実績がありますが、Windows実機のGUI操作全体やWeb版との完全な機能互換性は保証していません。GitHub Actionsが請求・利用上限の問題でジョブ開始前に失敗する場合、コードのテスト失敗とは区別してください。
 
-Web版のソースはTauri版に取り込み、別リポジトリとして独立管理します。
+## 主な機能
+
+- ノード・領域の配置、複数選択と移動、通信線の追加、折れ線の経由点編集
+- 片方向・双方向の通信、往路・復路の設定、通信順序の編集
+- 再生・一時停止・速度変更・分岐選択、ノード詳細とIF定義の参照
+- YAMLシナリオの読み込み、サブシナリオ・Actorファイルの参照、テンプレート取り込み
+- 無限座標の編集キャンバス、ズーム、表示リセット、Undo / Redo
+- 選択したローカルフォルダ内のYAMLの新規作成・競合検知付き保存
+
+## 画面と操作
+
+初めて使用する場合は[操作ガイド](docs/user-guide.md)を参照してください。画面キャプチャは実際のWindowsビルドで取得・検証できるまで掲載しません。実画面と異なるモック画像を操作説明として掲載しないためです。
 
 ## 開発環境
 
-Windows 11、Node.js 22、Rust stable、Microsoft C++ Build Tools（Desktop development with C++）、WebView2を使用します。
+Windows 11、Node.js 22、Rust stable、Microsoft C++ Build Tools（Desktop development with C++）、WebView2。
 
 ```powershell
 git clone https://github.com/Renasan-h/business-flow-explorer-tauri.git
 cd business-flow-explorer-tauri
+git switch develop_tauri
 npm install
 npm run dev
 ```
 
-## Windowsインストーラー作成
+ブラウザでフロントエンドだけを確認する場合：
 
 ```powershell
+npm run dev:web
+```
+
+**注意**：ブラウザでの実行はTauriのネイティブファイル操作を再現しません。ローカルフォルダ操作はデスクトップ版で確認してください。
+
+## ビルド・検証
+
+```powershell
+npm run build:web
+node scripts/test-editor-e2e.mjs
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo check --manifest-path src-tauri/Cargo.toml
 npm run build
 ```
 
-成果物は`src-tauri/target/release/bundle/nsis/`に生成されます。GitHub Actionsの`Tauri Windows release build`でも、インストーラーとPortable ZIPを生成できます。
+E2EにはPlaywrightとChromiumが必要です。セットアップ方法とCIの確認方法は[開発・保守ガイド](docs/development.md)に記載しています。
 
-## CI運用
+`npm run build` のNSISインストーラーは `src-tauri/target/release/bundle/nsis/` に生成されます。Portable ZIPはWindows向けGitHub Actionsの配布工程で作成します。**ZIP内の実行ファイルはインストール不要ですが、設定・データをZIP展開先だけに保存する「完全ポータブル」仕様ではありません。**
 
-- **push後の必須確認**：`develop_tauri` と `main` へのpushで `Full development checks` が自動実行されます。次の改修に進む前に、対象コミットの実行結果が `success` になったことを確認してください。失敗した場合は原因を修正し、再実行の成功を確認します。
-- 統合CIはWindows上でフロントエンドビルド・シナリオマニフェスト整合性検証（`develop_tauri`）・アイコン生成・`cargo test`・`cargo check` を実行します。インストーラーやZIPは作成しません。
-- 開発用の `Frontend checks`、`Rust unit tests`、`Rust compile check` は、変更されたファイルに応じて `main` 向けPull Request時に実行されます。ブランチへのpushだけでは起動しません。
-- 開発中に手動でテストしたい場合は、Actionsから目的のワークフローを選び、`Run workflow` で `develop_tauri` または作業ブランチを指定して実行します。
-- 目的別CIではフロントエンド検証、`cargo test`、`cargo check` を個別に実行します。Rust側の検証でもTauriのビルドスクリプト用にWebの `dist` を事前生成しますが、インストーラーやZIPは生成しません。
-- リリース時は変更をPull Requestで `main` に取り込み、`main` に `.github/workflows/release.yml` が反映された後、Actionsの `Tauri Windows release build` で `main` を選択して実行します。
-- リリースワークフローの `release_ref` には `main` に含まれるコミットSHAまたはタグを指定します。開発ブランチ上のコミットを直接リリースすることはできません。
-- リリース生成物のArtifactは `business-flow-explorer-windows`（NSIS）と `business-flow-explorer-portable-windows-x64`（Portable ZIP）です。Portable ZIPはインストール不要ですが、設定やデータを実行フォルダー内に保存する完全ポータブル仕様は保証していません。
+## データ保護上の注意
 
-## 開発方針と現状
+ローカルのYAMLはユーザーが選択したフォルダ内で読み書きします。既存ファイルの保存時は編集開始時の内容と比較し、外部変更があれば競合として拒否します。保存失敗時は編集内容を失わないように扱いますが、OS障害・強制終了を含むあらゆる状況からの復旧は保証しません。重要なYAMLは別途バックアップしてください。
 
-初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルフォルダの選択・YAML一覧・読み込み・新規作成・保存を行うRustコマンドとReact側の呼び出しは実装されています。ただしWindows実機でのGUI操作全体については、統合CIだけで動作保証できません。Web版のブラウザ制約がそのまま残る操作もあります。
+## リポジトリ構成
 
-今後はTauriのファイルダイアログ・ファイルシステム権限を最小限に設定し、Web版とデスクトップ版の保存処理を分離します。Web版のリポジトリは変更しません。
+| パス | 用途 |
+|---|---|
+| `src/` | React画面、シナリオ解析、エディター、再生 |
+| `src/editor/` | エディターUI、座標・選択・保存処理 |
+| `src/playback/` | 再生UI |
+| `src-tauri/` | Rustコマンド、Tauri設定 |
+| `public/scenarios/` | 同梱サンプルシナリオ |
+| `scripts/` | マニフェスト・アイコン生成、E2E |
+| `.github/workflows/` | CI・リリースビルド |
+| `docs/` | 操作・開発保守ドキュメント |
 
-## ブランチ運用
+## ブランチ・リリース
 
-- `main`：リリース用。開発コミットを直接反映しない。
-- `develop_tauri`：Tauri版の機能開発・テストを行う。
-- 機能完成後は `develop_tauri` から `main` にPull Requestを作成し、全CI成功とレビュー確認後に **Squash and merge** する。
-- 開発中は作業単位のコミット履歴を保持し、`main` への統合時に1コミットにまとめる。
+- `develop_tauri`：開発・検証用
+- `main`：リリース用。原則Pull Requestで取り込む
+- `Full development checks`：両ブランチへのpushで実行。開発ブランチではWindowsインストーラーとPortable ZIPもビルドし、開発用Artifactとしてアップロードします
+- `Tauri Windows release build`：`main` 上で手動実行。入力した `release_ref` が `main` の履歴に含まれる必要があります
+
+開発用Artifactと正式リリース用Artifactは別です。詳細は[開発・保守ガイド](docs/development.md)を参照してください。
