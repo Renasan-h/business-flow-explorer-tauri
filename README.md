@@ -76,7 +76,9 @@ E2EにはPlaywrightとChromiumが必要です。セットアップ方法とCIの
 
 - `develop_tauri`：開発・検証用
 - `main`：リリース用。原則Pull Requestで取り込む
-- `Full development checks`：両ブランチへのpushで実行。開発ブランチではWindowsインストーラーとPortable ZIPもビルドし、開発用Artifactとしてアップロードします
+- `Full development checks`：Actions画面から手動実行。`develop_tauri` ではWindowsインストーラーとPortable ZIPもビルドし、開発用Artifactとしてアップロードします
 - `Tauri Windows release build`：`main` 上で手動実行。入力した `release_ref` が `main` の履歴に含まれる必要があります
+
+**CIは無料枠節約のためすべて手動実行です。** `push` やPull Request作成では起動しません。GitHubのリポジトリ → Actions → 対象ワークフロー → **Run workflow** → ブランチ選択 → **Run workflow** で実行してください。なお、GitHubの請求・利用上限によるジョブ開始拒否は手動実行でも解消しません。
 
 開発用Artifactと正式リリース用Artifactは別です。詳細は[開発・保守ガイド](docs/development.md)を参照してください。
