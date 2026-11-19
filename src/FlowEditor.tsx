@@ -513,7 +513,11 @@ export default function FlowEditor({ initial, onClose, scenarioPath }: { initial
     scenarioPath, isNew, filename, yaml, nativeCreatedPath: nativeCreatedPath.current, expectedContent,
    });
    if (result.nativeCreatedPath) nativeCreatedPath.current = result.nativeCreatedPath;
-   if (scenarioPath?.startsWith('/scenarios/native/')) nativeOriginal.current = Promise.resolve(yaml);
+   // 新規作成したYAMLも次回以降は保存済みの原文を比較基準にする。
+   // 保存成功時のみ更新し、失敗時は古い原文を維持して競合を検出する。
+   if (scenarioPath?.startsWith('/scenarios/native/') || result.nativeCreatedPath) {
+    nativeOriginal.current = Promise.resolve(yaml);
+   }
    savedSnapshot.current = snapshotAtSave;
    setMessage(result.message);
    return true;
