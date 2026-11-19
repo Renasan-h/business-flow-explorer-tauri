@@ -615,6 +615,46 @@ mod tests {
     }
 
     #[test]
+    fn unchanged_yaml_saves_with_expected_content() {
+        let root = std::env::temp_dir().join(format!("bfe-save-expected-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        let original = "metadata: original\n";
+        let edited = "metadata: updated\n";
+        fs::write(&target, original).unwrap();
+
+        replace_yaml_checked(&target, edited, Some(original)).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), edited);
+        // 保存成功後は新しい内容を比較基準にして再保存できる。
+        replace_yaml_checked(&target, "metadata: final\n", Some(edited)).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "metadata: final\n");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn externally_modified_yaml_is_not_overwritten() {
+        let root = std::env::temp_dir().join(format!("bfe-save-conflict-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let target = root.join("scenario.yaml");
+        let original = "metadata: original\n";
+        let external = "metadata: external edit\n";
+        fs::write(&target, original).unwrap();
+        // エディターが開かれている間に別のアプリが内容を変更したケース。
+        fs::write(&target, external).unwrap();
+
+        let error = replace_yaml_checked(&target, "metadata: editor edit\n", Some(original)).unwrap_err();
+        assert!(error.contains("保存競合"), "{error}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), external);
+        assert_eq!(list_yaml(&root).unwrap(), vec!["scenario.yaml"]);
+        let temporary_count = fs::read_dir(&root).unwrap().filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
+        assert_eq!(temporary_count, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn failed_update_preserves_original_and_cleans_temp_files() {
         let root = std::env::temp_dir().join(format!("bfe-save-failure-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
