@@ -1,6 +1,7 @@
 # Business Flow Explorer Tauri版 — 開発引き継ぎ・残作業
 
 最終更新：2026-11-21（日本時間）
+CI依存固定対応時の基準HEAD：`3019af270abda1d3c2cfd5c594dace5a14d3eb7f`（本ファイル更新直前）
 P2対応時の基準HEAD：`6b8e9338dc4e7be26a247521fb32f858f84ea402`（本ファイル更新直前）
 Rustテスト修正時の基準HEAD：`393ebaab9ba19b23fb2fac9b5f26bb9ac217fa25`（本ファイル更新直前）
 P1対応時に確認した基準HEAD：`49909a52725bf1aff129b842e79a90ac2aaf4c79`（本ファイル更新直前）
@@ -163,7 +164,8 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `c257dc9`：Windowsコード署名方針を文書化。
 - `c9342b4`〜`6b8e933`：手動リリースワークフローにDraft作成・Artifact添付・タグ照合を追加。
 - **ワークフローは実行しておらず、CI成功・Draft作成成功を確認していない。**
-- 追加課題：GitHubツリーに `package-lock.json` が見当たらない一方、`release.yml` は `npm ci` を実行する。現状ではリリースビルドの依存解決が失敗する可能性が高い。`npm install` でロックファイルを生成・コミットしてから手動CIを実行すること。
+- **解消：** ユーザーのpush後、`develop_tauri` の `8b895e5` で `package-lock.json` が存在することをGitHubツリーから確認。
+- `3019af2`：`full-check.yml` の依存インストールを `npm ci` に固定し、Playwrightの二重インストールを削除。**ワークフローは未実行。**
 - ユーザーからRustの再テストは「問題ありませんでした」と報告あり。実行ログ・SHAは未取得のため、GitHub Actionsでの成功とは区別する。
 
 ## 10. 次の作業
