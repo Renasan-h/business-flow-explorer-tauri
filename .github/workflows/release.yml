@@ -126,10 +126,12 @@ jobs:
             [[ -f "$file" ]] && assets+=("$file")
           done
           (( ${#assets[@]} >= 2 )) || { echo "Expected both installer and portable ZIP"; exit 1; }
+          notes_file="docs/RELEASE_NOTES_\${RELEASE_REF#v}.md"
+          [[ -f "$notes_file" ]] || { echo "Release notes not found: $notes_file"; exit 1; }
           if gh release view "$RELEASE_REF" --json isDraft >/dev/null 2>&1; then
             is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
             [[ "$is_draft" == true ]] || { echo "Refusing to modify a published release"; exit 1; }
           else
-            gh release create "$RELEASE_REF" --draft --verify-tag --title "Business Flow Explorer $RELEASE_REF" --notes-file docs/RELEASE_NOTES_v0.1.0.md
+            gh release create "$RELEASE_REF" --draft --verify-tag --title "Business Flow Explorer $RELEASE_REF" --notes-file "$notes_file"
           fi
           gh release upload "$RELEASE_REF" "${assets[@]}" --clobber
