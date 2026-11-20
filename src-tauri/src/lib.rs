@@ -477,7 +477,7 @@ mod tests {
         let link_result = std::os::windows::fs::symlink_dir(&external, &linked);
         if let Err(error) = link_result {
             #[cfg(windows)]
-            if error.kind() == std::io::ErrorKind::PermissionDenied {
+            if error.kind() == std::io::ErrorKind::PermissionDenied || error.raw_os_error() == Some(1314) {
                 fs::remove_dir_all(base).unwrap();
                 return;
             }
@@ -508,7 +508,7 @@ mod tests {
         let link_result = std::os::windows::fs::symlink_file(&external, &linked);
         if let Err(error) = link_result {
             #[cfg(windows)]
-            if error.kind() == std::io::ErrorKind::PermissionDenied {
+            if error.kind() == std::io::ErrorKind::PermissionDenied || error.raw_os_error() == Some(1314) {
                 fs::remove_dir_all(base).unwrap();
                 return;
             }
