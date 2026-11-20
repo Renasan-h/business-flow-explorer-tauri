@@ -23,6 +23,22 @@ npm run dev
 
 ## ローカル検証
 
+初回は `npm install` と `npx playwright install chromium` を実行してください。WindowsではNode.js 22、Rust stable、C++ Build Tools、WebView2を使用します。
+
+```powershell
+npm test                # TypeScript・YAML参照・Playwright E2E・Rustテスト
+npm run test:unit       # TypeScriptビルド・バージョン・YAML参照検証
+npm run test:e2e        # Playwright E2Eのみ
+npm run test:rust       # Rustユニットテストのみ
+npm run test:all        # 上記 + Rust compile check
+npm run check:version   # package.json / Tauri / Cargo のバージョン整合
+npm run check:version -- v0.1.0 # 指定リリースタグとの一致も検証
+```
+
+バージョン更新時は `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` を同じ値に変更し、`npm run check:version -- vX.Y.Z` で確認してください。リリースノートの雛形は `docs/RELEASE_NOTES_v0.1.0.md` です。
+
+### 個別コマンド
+
 ```powershell
 npm run build:web
 npm install --no-save --package-lock=false playwright
