@@ -1,6 +1,7 @@
 # Business Flow Explorer Tauri版 — 開発引き継ぎ・残作業
 
 最終更新：2026-11-21（日本時間）
+P1対応時に確認した基準HEAD：`49909a52725bf1aff129b842e79a90ac2aaf4c79`（本ファイル更新直前）
 P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc`（本ファイル更新直前）
 確認した基準コミット：`86e8991fecc4c948f60b9059f25cf46d3d023db2`（本ファイル追加前の `develop_tauri` HEAD）
 **再開時は必ずGitHubの最新HEADを再取得すること。** このファイルの記載は自動更新されない。
@@ -67,7 +68,11 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 
 ### P1-1 バージョン管理の統一
 
-**状態：未着手**
+**状態：整合性検証スクリプトを実装済み／配布exeの表示バージョンは未検証**
+
+- [x] `scripts/check-version.mjs` でpackage.json・Tauri・Cargoの一致、指定タグの一致を検証する仕組みを追加。
+- [x] `npm run check:version` と `npm run check:version -- v0.1.0` を追加。
+- [x] `docs/development.md` に更新手順を記載。
 
 - [ ] `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` のバージョン整合性を確認する。
 - [ ] バージョン更新手順または検証スクリプトを整備し、タグ（例：`v0.1.0`）との対応を明確にする。
@@ -77,7 +82,9 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 
 ### P1-2 リリースノートの整備
 
-**状態：未着手**
+**状態：初回リリースノートのドラフト作成済み／実機結果・公開日未確定**
+
+- [x] `docs/RELEASE_NOTES_v0.1.0.md` に機能、Windows 11 x64、WebView2、NSIS・Portable ZIPの違い、署名・実機未検証の注意点を記載。
 
 - [ ] 初回リリースの主要機能、変更点、既知の制限、動作環境、ZIPとインストーラーの違いをまとめる。
 - [ ] READMEには開発状況を戻さず、GitHub Releases本文または `docs/` で管理する。
@@ -123,11 +130,22 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **Windows実機操作・インストーラー起動・保存再起動の実行はできていない。P0完了とは判定しない。**
 - 次はWindows 11実機で受け入れケースを実行し、GitHub Actionsの手動実行が可能な環境で`Full development checks`を起動・確認する。実行結果を本書へ記録する。
 
-## 7. 次の作業
+## 7. P1対応結果とローカルテストコマンド
 
-**第一候補：P0-1（Windows実機テストのケース・実行方法整備）とP0-2（CI制限の状況確認）。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+- `c7cf336`：`scripts/check-version.mjs` を追加。
+- `d828858`：`package.json` に `npm test`、`test:unit`、`test:e2e`、`test:rust`、`test:all`、`check:version` を追加しPlaywrightをdevDependenciesに登録。
+- `59d4220`：`docs/RELEASE_NOTES_v0.1.0.md` を追加。
+- `91d9853`：`docs/development.md` にローカル検証手順を追記。
+- `49909a5`：Cargo.tomlのバージョン抽出処理を修正。
+- 初回は `npm install`、`npx playwright install chromium` を実行し、以降 `npm test` でフロントエンド・Playwright・Rustテストをまとめて実行する。
+- **現行HEADのローカルテスト、GitHub Actions、Windows実機テストは未実行。** スクリプトを追加したこととテスト成功は別扱い。
+- P1-1は実機での表示バージョン・配布物確認が残る。P1-2は公開前のP0結果反映が残る。いずれも完全完了とは判定しない。
 
-## 8. ドキュメント運用
+## 8. 次の作業
+
+**第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+
+## 9. ドキュメント運用
 
 - `README.md`：利用者向けの製品紹介と画面画像のみ。
 - `docs/user-guide.md`：操作方法。
@@ -136,5 +154,6 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `docs/DEVELOPMENT_RULES.md`：継続開発のルール。
 - `docs/HANDOVER.md`：最新の進捗、検証状況、残作業、次の一手。
 - `docs/WINDOWS_ACCEPTANCE_TESTS.md`：Windows実機の受け入れ試験と結果記録様式。
+- `docs/RELEASE_NOTES_v0.1.0.md`：初回リリースノート案。
 
 **注意：** 本ファイルの作成はドキュメント変更であり、アプリのテスト成功やリリース完了を意味しない。
