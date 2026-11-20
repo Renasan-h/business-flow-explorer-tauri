@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const tauri = JSON.parse(await readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'));
 const cargo = await readFile(new URL('../src-tauri/Cargo.toml', import.meta.url), 'utf8');
-const packageSection = cargo.match(/^\[package\]([\s\S]*?)(?=^\[|$)/m)?.[1];
+const packageSection = cargo.split(/(?=^\[)/m).find(section => section.startsWith('[package]'));
 assert.ok(packageSection, 'Cargo.toml の [package] が見つかりません');
 const cargoVersion = packageSection.match(/^version\s*=\s*"([^"]+)"/m)?.[1];
 assert.ok(cargoVersion, 'Cargo.toml の package.version が見つかりません');
