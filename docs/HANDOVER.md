@@ -235,6 +235,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - Git cloneを再試行したが `Could not resolve host: github.com` のため取得不可。**追加テスト・ビルド・Windows実機・GitHub Actionsは未実行。** コード追加をPASSとはみなさない。
 - 次は `npm run test:e2e` の実行結果を取得し、Tauri開発ウィンドウとexeで再生順ドラッグと同梱シナリオ読込を確認する。CIは手動実行のみ。
 
+## 9.10 上下ボタンの再生順order再採番修正（2026-11-22）
+
+- 作業開始時HEAD `7a87b4b5e27f2d46633d252da3e9c123801a8436` と引き継ぎを照合。
+- `cd4e16b`：`src/editor/PlaybackOrderPanel.tsx` の共通 `setSteps` で並べ替え後の `order` を1から再採番。ドラッグでは再採番されていたが、上下ボタンは配列だけ入れ替えていたため挙動を統一。
+- ローカル `git ls-remote` は `Could not resolve host: github.com`。**ビルド・E2E・Windows実機・GitHub Actions未実行。** テストPASSや保存不具合解消は未確認。
+- 次回は `npm run test:e2e` とTauri実機でドラッグ、上下ボタン、保存・再読込の順序を検証。CIは手動実行。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
