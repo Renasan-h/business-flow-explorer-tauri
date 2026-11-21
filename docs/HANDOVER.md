@@ -194,6 +194,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **コード修正済み、ローカルテスト・Windows実機再確認・GitHub Actionsは未実行。** 再現原因がこれで解消するか未確認。右側の通信再生順リストのHTML Drag & Dropは変更していない。
 - 次回、フロー図上の番号ドラッグと右側リストのドラッグの両方を確認し、失敗する操作を特定する。
 
+## 9.4 右側の再生順一覧ドラッグ修正（2026-11-21）
+
+- ユーザー確認により、ドラッグできない対象はフロー図上マーカーではなく**右側「通信の再生順」一覧**と確定。
+- `d993b1d`：`src/editor/PlaybackOrderPanel.tsx` のHTML Drag & DropをPointer Events + pointer capture + `elementFromPoint` に変更。移動先強調、移動後の`order`再採番、キーボード上下矢印操作を追加。
+- ローカル検証を試みたが実行環境からgithub.comの名前解決に失敗しclone不可。**ビルド・Playwright・Windows実機・GitHub Actionsは未実行。**
+- 次はユーザーのWindows環境で `npm run build:web`、再生順一覧のドラッグ操作（上→下、下→上、キャンセル）、保存・再読込、Undo/Redoを確認する。必要に応じてPlaywright回帰テストを追加する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
