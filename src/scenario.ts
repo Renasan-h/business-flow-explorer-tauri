@@ -138,8 +138,13 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
   yaml = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(relative) });
  } else {
   const bundledPath = import.meta.env.DEV ? canonical : canonical.replace(/^\/scenarios\/0\//, '/scenarios/');
-  const response = await fetch(bundledPath, { cache: 'no-store' });
-  if (!response.ok) throw new Error('シナリオの読み込みに失敗しました: ' + canonical);
+  let response: Response;
+  try {
+   response = await fetch(bundledPath, { cache: 'no-store' });
+  } catch (error) {
+   throw new Error(`シナリオの取得に失敗しました (${bundledPath}): ${String(error)}`);
+  }
+  if (!response.ok) throw new Error(`シナリオの取得に失敗しました (${bundledPath}): HTTP ${response.status}`);
   yaml = await response.text();
  }
  const parsed: unknown = parse(yaml) ?? {};
