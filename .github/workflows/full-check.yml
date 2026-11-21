@@ -30,6 +30,8 @@ jobs:
       - name: Prepare frontend (development branch)
         if: github.ref == 'refs/heads/develop_tauri'
         run: npm run build:web
+      - name: Verify application versions and scenario references
+        run: npm run check:version && node scripts/test-scenario-fragments.mjs
       - name: Verify generated scenario manifest
         if: github.ref == 'refs/heads/develop_tauri'
         run: git diff --exit-code -- public/scenarios/manifest.json
