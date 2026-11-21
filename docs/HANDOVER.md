@@ -242,6 +242,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ローカル `git ls-remote` は `Could not resolve host: github.com`。**ビルド・E2E・Windows実機・GitHub Actions未実行。** テストPASSや保存不具合解消は未確認。
 - 次回は `npm run test:e2e` とTauri実機でドラッグ、上下ボタン、保存・再読込の順序を検証。CIは手動実行。
 
+## 9.11 再生順ドラッグのEscape中断（2026-11-22）
+
+- 作業開始時HEAD `c51409f1d27154c4a001caf721dc889d9569a116` と引き継ぎ資料を照合。
+- `a89dbf8`：`PlaybackOrderPanel.tsx` のドラッグ中にEscapeでキャンセルできるようにし、再採番の二重処理を共通関数へ集約。
+- `3575b21`：PlaywrightでEscape中断後の順序維持を検証するケースを追加。
+- 一度保存YAMLにorder連番を必須とするテストを追加したが、同梱YAMLはorder省略仕様だったため、`fe360f0`で不適切な期待値を撤回。既存のID順検証は維持。
+- ユーザー方針によりテストはWindows側で実行。**本変更のビルド・E2E・Tauri実機・GitHub Actionsは未実行。** 結果を受けて修正する。ローカルGit接続エラーを理由にGitHub連携での開発は止めない。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
