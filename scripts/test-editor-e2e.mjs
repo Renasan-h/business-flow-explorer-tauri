@@ -515,6 +515,31 @@ try {
     throw new Error('Undo did not restore playback order after upward pointer drag');
   }
 
+  // ドラッグ途中でキャンセルした場合、並び順は変更されない。
+  const cancelledHandle = playbackRows.nth(0).locator('.editor-step-drag-handle');
+  const cancelledStart = await cancelledHandle.boundingBox();
+  const cancelledDestination = await playbackRows.nth(1).boundingBox();
+  if (!cancelledStart || !cancelledDestination) throw new Error('Playback order cancellation rows are not visible');
+  await page.mouse.move(cancelledStart.x + cancelledStart.width / 2, cancelledStart.y + cancelledStart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelledDestination.x + cancelledDestination.width / 2, cancelledDestination.y + cancelledDestination.height / 2, { steps: 5 });
+  await cancelledHandle.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Cancelled playback order drag unexpectedly changed order');
+  }
+  // キーボード操作も同じ並べ替え経路を通り、Undoで元に戻せる。
+  await playbackRows.nth(1).locator('.editor-step-drag-handle').focus();
+  await page.keyboard.press('ArrowUp');
+  const keyboardReordered = await playbackTitles();
+  if (!keyboardReordered[0].includes('在庫照会')) {
+    throw new Error('Keyboard playback order move failed: ' + JSON.stringify(keyboardReordered));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore keyboard playback order move');
+  }
+
   // 往路・復路の経由点を独立して追加・解除し、Undo/Redoでも相手側を保持する。
   const receiveEdge = page.locator('.editor-edge[data-step-id="receive"]');
   const openReceiveMenu = async () => {
