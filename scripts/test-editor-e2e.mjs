@@ -528,6 +528,15 @@ try {
   if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
     throw new Error('Cancelled playback order drag unexpectedly changed order');
   }
+  // Escapeでもドラッグを中断でき、マウスボタンを離しても順序が変わらない。
+  await page.mouse.move(cancelledStart.x + cancelledStart.width / 2, cancelledStart.y + cancelledStart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelledDestination.x + cancelledDestination.width / 2, cancelledDestination.y + cancelledDestination.height / 2, { steps: 5 });
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Escape cancelled playback order drag unexpectedly changed order');
+  }
   // キーボード操作も同じ並べ替え経路を通り、Undoで元に戻せる。
   await playbackRows.nth(1).locator('.editor-step-drag-handle').focus();
   await page.keyboard.press('ArrowUp');
