@@ -24,7 +24,7 @@ export default function PlaybackOrderPanel({ steps, selectedStep, onChange, onSe
    const reordered = [...current];
    const [moved] = reordered.splice(from, 1);
    reordered.splice(to, 0, moved);
-   return reordered.map((step, index) => ({ ...step, order: index + 1 }));
+   return reordered;
   });
  };
  const targetAt = (element: HTMLElement, x: number, y: number) => {
@@ -63,6 +63,15 @@ export default function PlaybackOrderPanel({ steps, selectedStep, onChange, onSe
        }}
        onPointerCancel={() => { dragRef.current = null; setDraggedStep(null); setDropTarget(null); }}
        onKeyDown={event => {
+        if (event.key === 'Escape' && dragRef.current) {
+         event.preventDefault();
+         const pointerId = dragRef.current.pointerId;
+         dragRef.current = null;
+         setDraggedStep(null);
+         setDropTarget(null);
+         if (event.currentTarget.hasPointerCapture(pointerId)) event.currentTarget.releasePointerCapture(pointerId);
+         return;
+        }
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
         event.preventDefault();
         const destination = steps[index + (event.key === 'ArrowUp' ? -1 : 1)];
