@@ -201,6 +201,12 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ローカル検証を試みたが実行環境からgithub.comの名前解決に失敗しclone不可。**ビルド・Playwright・Windows実機・GitHub Actionsは未実行。**
 - 次はユーザーのWindows環境で `npm run build:web`、再生順一覧のドラッグ操作（上→下、下→上、キャンセル）、保存・再読込、Undo/Redoを確認する。必要に応じてPlaywright回帰テストを追加する。
 
+## 9.5 TOPフォルダ選択のTauri APIエラー（2026-11-21）
+
+- ユーザーから `Cannot read properties of undefined (reading 'invoke')` を報告。`src/App.tsx` の `select_scenario_folder` 呼び出しでTauriブリッジが存在しない場合に起こり得る。通常ブラウザーで開いた可能性があるが、実際の実行環境は未確認。
+- `4b9f48d`：`src/App.tsx` で `isTauri()` によるガードを追加し、ブラウザーではネイティブフォルダ選択ボタンを無効化。デスクトップ側の選択処理は維持。
+- **修正後のビルド、実機動作、CIは未実行。** ユーザーに `npm run dev` で起動したTauriウィンドウかブラウザーかを確認し、Windows実機でフォルダ選択を再検証する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
