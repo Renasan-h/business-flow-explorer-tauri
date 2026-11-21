@@ -137,7 +137,7 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  if (relative !== null) {
   yaml = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(relative) });
  } else {
-  const bundledPath = canonical.replace(/^\/scenarios\/0\//, '/scenarios/');
+  const bundledPath = import.meta.env.DEV ? canonical : canonical.replace(/^\/scenarios\/0\//, '/scenarios/');
   const response = await fetch(bundledPath, { cache: 'no-store' });
   if (!response.ok) throw new Error('シナリオの読み込みに失敗しました: ' + canonical);
   yaml = await response.text();
@@ -252,9 +252,9 @@ export async function listScenarios(rootId = '0'): Promise<string[]> {
   }));
   return parents.filter((path): path is string => path !== null);
  }
- const response = await fetch('/scenarios/manifest.json', { cache: 'no-store' });
+ const response = await fetch(import.meta.env.DEV ? `/scenarios/${rootId}/manifest.json` : '/scenarios/manifest.json', { cache: 'no-store' });
  if (!response.ok) throw new Error('Scenario index load failed');
- return z.array(z.string()).parse(await response.json()).map(path => path.replace(/^\/scenarios\//, '/scenarios/0/'));
+ return z.array(z.string()).parse(await response.json()).map(path => path.startsWith(`/scenarios/${rootId}/`) ? path : path.replace(/^\/scenarios\//, `/scenarios/${rootId}/`));
 }
 
 /** 再生開始時だけ双方向の復路設定を検証する。読み込み・編集は妨げない。 */
