@@ -220,6 +220,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `src/scenario.ts` のYAML取得処理を調査。失敗するURLやHTTPステータスが現状のUIに表示されないため、`67a7e5f`でURL・HTTP状態を含むエラー表示に改善。
 - **根本原因は未特定、動作確認・ビルド・E2E・GitHub Actionsは未実行。** 次回は失敗URLとブラウザーNetwork/Console、Viteターミナルのログを確認し、再現原因に対応する。
 
+## 9.8 Tauri版の再生順ドラッグ回帰テスト追加（2026-11-22）
+
+- ユーザー方針：Web版は移植元の参照のみ。Chromeでの挙動はTauri版に影響する場合を除きリリース判定対象外。
+- `5a4cc49`、`c12077c`：`scripts/test-editor-e2e.mjs` に右側「通信の再生順」一覧のPointer Eventsによる上→下、下→上ドラッグとCtrl+Zの回帰テストを追加。期待表示名を同梱YAMLに合わせた。
+- `develop_tauri` の作業開始時HEADは `bb58c7222b03f087ea8e0ee99281c149e3ed9556`。引き継ぎの直近コミットと一致。
+- ローカルGit cloneを試したが `Could not resolve host: github.com` で失敗。**新規E2E、ビルド、Windows実機、GitHub Actionsは未実行。**
+- 次はTauri開発ウィンドウでの同梱シナリオ読込、再生順ドラッグの動作を確認し、`npm run test:e2e`を実行して結果に応じて修正する。GitHub Actionsは手動実行のみ。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
