@@ -614,6 +614,9 @@ try {
   if (downloadedScenario.steps.map(step => step.id).join(',') !== 'receive,stock,stock-result,pay,done') {
     throw new Error('YAML save changed playback order after Undo');
   }
+  if (downloadedScenario.steps.some((step, index) => step.order !== index + 1)) {
+    throw new Error('Saved YAML playback order numbers are not sequential: ' + JSON.stringify(downloadedScenario.steps.map(step => step.order)));
+  }
   const bidirectionalStep = downloadedScenario.steps.find(step => step.id === 'receive');
   if (!bidirectionalStep || bidirectionalStep.bidirectional !== true ||
       bidirectionalStep.reverseFrom !== 'order' ||
