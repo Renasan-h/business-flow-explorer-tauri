@@ -914,7 +914,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew }
       if (orderDrag.current?.pointerId === event.pointerId) {
        const dragOrder = orderDrag.current;
        const point = toWorld(event.clientX, event.clientY);
-       const destination = steps.map(step => ({ id: step.id, point: orderPoint(step) })).find(item => item.point && Math.hypot(item.point.x - point.x, item.point.y - point.y) < 32);
+       const destination = steps.map(step => ({ id: step.id, point: orderPoint(step), radius: orderRadius(step) })).filter(item => item.point && item.id !== dragOrder.source).map(item => ({ ...item, distance: Math.hypot(item.point!.x - point.x, item.point!.y - point.y) })).filter(item => item.distance <= Math.max(item.radius, 20 / zoom)).sort((a, b) => a.distance - b.distance)[0];
        if (dragOrder.moved && destination) { moveOrder(dragOrder.source, destination.id); setOrderSource(null); }
        else if (!dragOrder.moved) chooseOrder(dragOrder.source);
        orderDrag.current = null;
