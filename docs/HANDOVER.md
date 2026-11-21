@@ -1,6 +1,7 @@
 # Business Flow Explorer Tauri版 — 開発引き継ぎ・残作業
 
 最終更新：2026-11-21（日本時間）
+統合CI追加検証時の基準HEAD：`2484a1ddf20cac49c7fe5b40c2da321083833584`（本ファイル更新直前）
 CI全ワークフロー固定時の基準HEAD：`ac3e94d04f3b0736a6af63f6ed3d583b350dc510`（本ファイル更新直前）
 CI依存固定対応時の基準HEAD：`3019af270abda1d3c2cfd5c594dace5a14d3eb7f`（本ファイル更新直前）
 P2対応時の基準HEAD：`6b8e9338dc4e7be26a247521fb32f858f84ea402`（本ファイル更新直前）
@@ -168,7 +169,8 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **解消：** ユーザーのpush後、`develop_tauri` の `8b895e5` で `package-lock.json` が存在することをGitHubツリーから確認。
 - `3019af2`：`full-check.yml` の依存インストールを `npm ci` に固定し、Playwrightの二重インストールを削除。
 - `ebe6e5f`、`4a3ba08`、`ac3e94d`：Frontend checks / Rust unit tests / Rust compile check の各手動CIも `npm ci` に統一。
-- **すべてワークフロー未実行。** 現在のActions履歴に最新HEADの成功実行はない。
+- `2484a1d`：統合CIにバージョン整合とYAML断片参照検証を追加。
+- **変更後のワークフローは未実行。** 2026-11-21確認時点でActionsの最新runは2026-11-19の `44578013972`（failure、旧SHA）。現行HEADに対する成功実行はない。
 - ユーザーからRustの再テストは「問題ありませんでした」と報告あり。実行ログ・SHAは未取得のため、GitHub Actionsでの成功とは区別する。
 
 ## 10. 次の作業
