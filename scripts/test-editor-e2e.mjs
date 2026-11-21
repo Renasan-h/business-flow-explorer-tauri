@@ -507,7 +507,7 @@ try {
   }
   await dragPlaybackRow(2, 0);
   const draggedUp = await playbackTitles();
-  if (!draggedUp[0].includes('在庫照会結果')) {
+  if (!draggedUp[0].includes('在庫回答')) {
     throw new Error('Pointer drag did not move the third playback step up: ' + JSON.stringify(draggedUp));
   }
   await page.keyboard.press('Control+z');
