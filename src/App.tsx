@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, isTauri } from '@tauri-apps/api/core';
 import { branchGroups, playbackActors, playbackSteps } from './branchPlayback';
 import { useEffect, useState } from 'react';
 import FlowEditor from './FlowEditor';
@@ -28,6 +28,10 @@ export default function App() {
  const [activeRoot, setActiveRoot] = useState('0');
  const [nativeFolder, setNativeFolder] = useState<string | null>(null);
  const selectNativeFolder = async () => {
+  if (!isTauri()) {
+   setError('ローカルフォルダの選択はTauriデスクトップアプリでのみ利用できます。ブラウザーではなくアプリのウィンドウから操作してください。');
+   return;
+  }
   try {
    const selected = await invoke<string | null>('select_scenario_folder');
    if (!selected) return;
@@ -202,7 +206,7 @@ export default function App() {
  }
  if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} createNew={false} initial={scenario} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  return <div className="app">
-  <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()}>📁 ローカルのシナリオフォルダを開く</button></div>
+  <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()} disabled={!isTauri()} title={!isTauri() ? 'Tauriデスクトップアプリでのみ利用できます' : undefined}>📁 ローカルのシナリオフォルダを開く</button></div>
   <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>
   <div className="layout">
    <ScenarioSidebar open={scenarioMenuOpen} paths={paths} titles={scenarioTitles} categories={scenarioCategories} selected={selected}
