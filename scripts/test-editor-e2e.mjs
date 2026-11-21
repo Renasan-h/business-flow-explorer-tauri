@@ -482,6 +482,39 @@ try {
   await page.keyboard.press('Control+z');
   if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Playback order was not restored before YAML save');
 
+  // 右側の通信再生順一覧: Pointer Eventsで上下双方にドラッグでき、Undo/Redoも成立する。
+  const dragPlaybackRow = async (fromIndex, toIndex) => {
+    const handle = playbackRows.nth(fromIndex).locator('.editor-step-drag-handle');
+    const destination = playbackRows.nth(toIndex);
+    await handle.scrollIntoViewIfNeeded();
+    await destination.scrollIntoViewIfNeeded();
+    const from = await handle.boundingBox();
+    const to = await destination.boundingBox();
+    if (!from || !to) throw new Error('Playback order drag handles are not visible');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+  await dragPlaybackRow(0, 2);
+  const draggedDown = await playbackTitles();
+  if (!draggedDown[0].includes('在庫照会') || !draggedDown[2].includes('注文受付')) {
+    throw new Error('Pointer drag did not move the first playback step down: ' + JSON.stringify(draggedDown));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore playback order after pointer drag');
+  }
+  await dragPlaybackRow(2, 0);
+  const draggedUp = await playbackTitles();
+  if (!draggedUp[0].includes('在庫照会結果')) {
+    throw new Error('Pointer drag did not move the third playback step up: ' + JSON.stringify(draggedUp));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore playback order after upward pointer drag');
+  }
+
   // 往路・復路の経由点を独立して追加・解除し、Undo/Redoでも相手側を保持する。
   const receiveEdge = page.locator('.editor-edge[data-step-id="receive"]');
   const openReceiveMenu = async () => {
