@@ -14,7 +14,7 @@ export default function PlaybackOrderPanel({ steps, selectedStep, onChange, onSe
  const [draggedStep, setDraggedStep] = useState<string | null>(null);
  const dragRef = useRef<{ id: string; pointerId: number; startY: number } | null>(null);
  const [dropTarget, setDropTarget] = useState<string | null>(null);
- const setSteps = (updater: (current: Step[]) => Step[]) => onChange(updater(steps));
+ const setSteps = (updater: (current: Step[]) => Step[]) => onChange(updater(steps).map((step, index) => ({ ...step, order: index + 1 })));
  const moveStep = (fromId: string, toId: string) => {
   if (fromId === toId) return;
   setSteps(current => {
