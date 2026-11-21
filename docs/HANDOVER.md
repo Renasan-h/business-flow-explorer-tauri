@@ -173,6 +173,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **変更後のワークフローは未実行。** 2026-11-21確認時点でActionsの最新runは2026-11-19の `44578013972`（failure、旧SHA）。現行HEADに対する成功実行はない。
 - ユーザーからRustの再テストは「問題ありませんでした」と報告あり。実行ログ・SHAは未取得のため、GitHub Actionsでの成功とは区別する。
 
+## 9.1 Windowsローカルビルド結果（2026-11-21 ユーザー報告）
+
+- ユーザー提供の `cargo-build.log` に `Finished dev profile [unoptimized + debuginfo] target(s) in 0.34s` を確認。`cargo check --manifest-path src-tauri/Cargo.toml -vv` は成功。依存ライブラリのwarningはあるが、当該ログにエラーはない。
+- ユーザーより `npm run build` が問題なく終了したとの報告あり。**ローカルのWindows向け配布ビルド成功（報告ベース）**として扱う。生成物の起動・ZIP展開・NSISインストールは未確認。
+- 実行時のローカルSHAは未取得のため、`develop_tauri` 現行HEAD `542c225` での検証成功と同一視しない。
+- WIN-01〜24は実行証跡未取得のためすべて未判定。次にWIN-01〜03、WIN-05〜13の起動・保存・競合・未保存遷移を優先し、実行結果を `docs/WINDOWS_ACCEPTANCE_TESTS.md` の様式で記録する。
+- 2026-11-21のGitHub Actions確認では最新runは旧SHAの `44578013972`（failure）。現行HEADのCIは未実行。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
