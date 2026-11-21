@@ -228,6 +228,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ローカルGit cloneを試したが `Could not resolve host: github.com` で失敗。**新規E2E、ビルド、Windows実機、GitHub Actionsは未実行。**
 - 次はTauri開発ウィンドウでの同梱シナリオ読込、再生順ドラッグの動作を確認し、`npm run test:e2e`を実行して結果に応じて修正する。GitHub Actionsは手動実行のみ。
 
+## 9.9 再生順ドラッグのキャンセル・キーボード回帰テスト（2026-11-22）
+
+- 作業開始時HEAD：`8e686d44c169f98660b4cb4665b2b5c6a05dacee`。直近引き継ぎコミットと一致。
+- `32601e9`：`scripts/test-editor-e2e.mjs` にPointer Eventsのドラッグキャンセル時の順序維持、およびハンドルの上下矢印キーによる並べ替えとCtrl+Z復元の検証を追加。
+- Git cloneを再試行したが `Could not resolve host: github.com` のため取得不可。**追加テスト・ビルド・Windows実機・GitHub Actionsは未実行。** コード追加をPASSとはみなさない。
+- 次は `npm run test:e2e` の実行結果を取得し、Tauri開発ウィンドウとexeで再生順ドラッグと同梱シナリオ読込を確認する。CIは手動実行のみ。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
