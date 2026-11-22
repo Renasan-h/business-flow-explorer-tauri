@@ -311,6 +311,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `0303946` のPlaywright E2E PASSは確認済みだが、`2031009` と `64614c7` 以降の変更を含む最新HEADのE2E、Windowsビルド、実機操作、GitHub Actionsは未確認。
 - 次はWindows側で `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build`。実機ではWIN-04・08・14〜17・25・26を優先し、結果を記録する。
 
+## 9.20 E2E成功ログの検証対象明確化（2026-11-22）
+
+- 作業開始時HEAD `9b04a4dbffbbec6f87ec9fa1fd332e2763aac89e`。引き継ぎ資料とGitHub実装を照合。
+- `e69fc79`：`scripts/test-editor-e2e.mjs` の成功ログに単一・複数ノードのBackspace/Delete削除、確認キャンセル、Undoを明記。これまで検証を実装していてもPASS表示から判別できなかった点を改善。
+- **変更後のE2Eは未実行。** ユーザー報告で確認済みなのは旧HEAD `0303946` のPASSのみ。最新版のE2E・Windows Tauriビルド・受け入れ試験・手動CIは引き続き未検証。
+- 次はWindows環境で `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build` を実行し、ログに削除キー検証が出ることとPASSを確認。続いてWIN-04・08・14〜17・25・26を実機確認。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
