@@ -697,7 +697,7 @@ try {
 
 
   if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
-  console.log('PASS: undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, playback order undo/redo and YAML order, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
+  console.log('PASS: single/multi-node Backspace/Delete cancel, delete and Undo, undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, playback order undo/redo and YAML order, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
   if (process.platform === 'win32') {
