@@ -263,6 +263,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `6a2aee0`：`tsconfig.json` の `compilerOptions.types` に `vite/client` を追加し、Viteの `ImportMetaEnv` 型をTypeScriptへ読み込ませる。
 - **修正後のビルド・E2E・Rust・Windows実機・GitHub Actionsは未実行。** ユーザーのWindows側で `git pull origin develop_tauri` 後、`npm run build` を再実行して確認する。追加エラーがあればログに基づき修正。
 
+## 9.14 Backspace/Deleteによるノード削除（2026-11-22）
+
+- 作業開始時HEAD `2901001efd1da1581806b0273e0962c3910dcaed` を確認し、仕様・開発ルールを参照。
+- `3e5bb7d`：`src/FlowEditor.tsx` でBackspace/Deleteによる単一・複数選択ノード削除を追加。確認ダイアログ1回、関連通信削除、選択解除、入力欄・ダイアログ・プレビュー中の無効化を実装。
+- `3bf4f3f`：`scripts/test-editor-e2e.mjs` にBackspaceの確認キャンセル、Deleteの削除確定、Ctrl+Z復元の回帰ケースを追加。
+- `4855cb2`：`docs/SPECIFICATION.md` に操作仕様を反映。
+- **ビルド・E2E・Windows Tauri実機・GitHub Actionsは未実行。** ユーザーのWindows環境で `npm run build` と `npm run test:e2e` を実行して結果を確認する。複数選択の実機削除も確認対象。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
