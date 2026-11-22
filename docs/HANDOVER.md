@@ -280,6 +280,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - Node.js v24の `DEP0190` はshell=trueで子プロセス起動時の警告で、今回のクリックタイムアウトとは別件。必要に応じてspawn方法を後日改善。
 - **修正後E2E・ビルド・Windows実機・GitHub Actionsは未実行。** Windows側で `git pull origin develop_tauri` 後に `npm run test:e2e` を再実行して結果を確認する。
 
+## 9.16 Windows E2Eの既存シナリオ読み込み待機修正（2026-11-22）
+
+- 作業開始時HEAD `509fdd30d65d7c765dc5e3bafc7641f9319a560d` と引き継ぎ資料を確認。
+- ユーザー実行 `npm run test:e2e` が `scripts/test-editor-e2e.mjs:441` の「ECサイトの注文処理」見出し待機で30秒タイムアウト。
+- `scenario.ts` は開発時に `/scenarios/0/manifest.json` と `/scenarios/0/order-processing.yaml` を参照し、`vite.config.ts` のプラグインもこのURLを処理する。一方E2Eは旧URL `/scenarios/manifest.json` と `/scenarios/order-processing.yaml` をモックしていたため、想定シナリオを差し込めなかった。
+- `96fc7e1`：E2Eのmanifest/YAMLモックURLを `/scenarios/0/` に修正し、manifestの返却値も同じURLに統一。
+- Node.js `DEP0190` 警告は引き続き別件。**修正後E2E・ビルド・Windows実機・GitHub Actionsは未実行。** Windows側の再実行ログを待つ。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
