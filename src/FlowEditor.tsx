@@ -418,6 +418,36 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew }
   setSelectedGroup(null);
   setMessage('再生ステップを削除しました。');
  };
+ /** Backspace/Deleteで選択中のノードを削除する。複数選択時は確認を1回にまとめる。 */
+ useEffect(() => {
+  const handleDeleteKey = (event: KeyboardEvent) => {
+   if (event.key !== 'Backspace' && event.key !== 'Delete') return;
+   if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+   if (preview || exitConfirmationOpen || templateImportOpen || interfacePanel !== null) return;
+   const target = event.target;
+   if (target instanceof Element && target.closest('input, textarea, select, button, [contenteditable], [role="textbox"], [role="dialog"]')) return;
+   const ids = [...new Set(tool === 'multi' && selectedActors.length ? selectedActors : selectedActor ? [selectedActor] : [])];
+   const selected = actors.filter(actor => ids.includes(actor.id));
+   if (!selected.length) return;
+   event.preventDefault();
+   const label = selected.length === 1 ? `ノード「${selected[0].name}」` : `選択中の${selected.length}件のノード`;
+   if (!window.confirm(`${label}を削除しますか？\\n関連する通信ステップも削除されます。`)) return;
+   const removed = new Set(selected.map(actor => actor.id));
+   setActors(current => current.filter(actor => !removed.has(actor.id)));
+   setSteps(current => current.filter(step => step.actions.every(action => !removed.has(action.from) && !removed.has(action.to)) &&
+    !removed.has(step.reverseFrom ?? '') && !removed.has(step.reverseTo ?? '')));
+   setSelectedActor(null);
+   setSelectedActors([]);
+   setSelectedStep(null);
+   setSelectedGroup(null);
+   setSource(null);
+   setWire(null);
+   setContextMenu(null);
+   setMessage(`${selected.length}件のノードと関連する通信を削除しました。`);
+  };
+  window.addEventListener('keydown', handleDeleteKey);
+  return () => window.removeEventListener('keydown', handleDeleteKey);
+ });
  /** 逆方向の接続が既にあれば既存通信を双方向へ切り替え、重複登録しない。 */
  const addConnection = (from: string, to: string) => {
   if (from === to) { setMessage('同じノード同士は接続できません。'); return; }
