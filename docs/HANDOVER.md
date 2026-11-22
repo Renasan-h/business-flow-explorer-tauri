@@ -256,6 +256,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `ff01062`：ドラッグ開始時の `preventDefault()` でフォーカスが移らずEscキーがハンドルへ届かない可能性があったため、`onPointerDown` で `event.currentTarget.focus()` を明示。
 - ユーザー方針によりテストはユーザーのWindows環境で実施。**ビルド・E2E・Tauri実機・GitHub Actionsは未実行。** テスト結果で動作を確定する。
 
+## 9.13 Windowsビルド時のVite ImportMeta型エラー修正（2026-11-22）
+
+- ユーザーがWindows UCRT64で `npm run build` を実行し、`src/scenario.ts:140,260` の `import.meta.env.DEV` に対して `TS2339: Property 'env' does not exist on type 'ImportMeta'` が発生したと報告。
+- 作業開始時HEAD `816c7ccf00cf2ba87b648597a27575f5fb3f2631` を確認。`tsconfig.json` にViteの型参照が存在しなかった。
+- `6a2aee0`：`tsconfig.json` の `compilerOptions.types` に `vite/client` を追加し、Viteの `ImportMetaEnv` 型をTypeScriptへ読み込ませる。
+- **修正後のビルド・E2E・Rust・Windows実機・GitHub Actionsは未実行。** ユーザーのWindows側で `git pull origin develop_tauri` 後、`npm run build` を再実行して確認する。追加エラーがあればログに基づき修正。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
