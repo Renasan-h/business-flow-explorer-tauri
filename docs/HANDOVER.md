@@ -271,6 +271,15 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `4855cb2`：`docs/SPECIFICATION.md` に操作仕様を反映。
 - **ビルド・E2E・Windows Tauri実機・GitHub Actionsは未実行。** ユーザーのWindows環境で `npm run build` と `npm run test:e2e` を実行して結果を確認する。複数選択の実機削除も確認対象。
 
+## 9.15 Windows E2Eのフォルダ選択ボタンdisabled修正（2026-11-22）
+
+- 作業開始時HEAD `54d615f8724d59351fbe3e6cff9ca69f3d7fa589` と引き継ぎ資料を照合。
+- ユーザー実行 `npm run test:e2e` が `scripts/test-editor-e2e.mjs:99` の「ローカルのシナリオフォルダを開く」ボタンのdisabled状態で30秒タイムアウト。
+- `@tauri-apps/api/core` の `isTauri()` は `globalThis.isTauri` を参照するが、テストの `addInitScript` は `__TAURI_INTERNALS__` のinvokeのみモックしていた。
+- `cb12d73`：2つのネイティブ保存テスト画面で `window.isTauri = true` を設定。フォルダ選択ボタンの無効化を回避する。
+- Node.js v24の `DEP0190` はshell=trueで子プロセス起動時の警告で、今回のクリックタイムアウトとは別件。必要に応じてspawn方法を後日改善。
+- **修正後E2E・ビルド・Windows実機・GitHub Actionsは未実行。** Windows側で `git pull origin develop_tauri` 後に `npm run test:e2e` を再実行して結果を確認する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
