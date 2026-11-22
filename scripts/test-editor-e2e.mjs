@@ -74,6 +74,9 @@ try {
     const files = new Map();
     const calls = [];
     window.__nativeSaveTest = { files, calls };
+    // @tauri-apps/api/core の isTauri() は globalThis.isTauri を参照する。
+    // invokeだけをモックしてもフォルダ選択ボタンがdisabledになる。
+    window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === 'select_scenario_folder') return 'E2E test folder';
@@ -148,6 +151,9 @@ try {
     const files = new Map([['empty-existing.yaml', content]]);
     const calls = [];
     window.__emptyExistingTest = { files, calls };
+    // @tauri-apps/api/core の isTauri() は globalThis.isTauri を参照する。
+    // invokeだけをモックしてもフォルダ選択ボタンがdisabledになる。
+    window.isTauri = true;
     window.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         if (command === 'select_scenario_folder') return 'E2E existing folder';
