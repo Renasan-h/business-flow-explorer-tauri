@@ -303,6 +303,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ユーザー報告で `0303946` のE2EはPASS済み。ただし `2031009` のNode警告修正と今回追加した複数削除E2Eは**未実行**。
 - Windows実機の残ケースWIN-04・08・14〜24とBackspace/Delete操作、最新HEADのTauriビルド、GitHub Actionsは未確認。次はWindows側で `npm run test:e2e` と `npm run build` を実行し、残ケースを確認する。
 
+## 9.19 Windows実機受け入れケース拡充（2026-11-22）
+
+- 作業開始時HEAD `5b3f4d4c35e27b0f20cbf04e609ca913e64379b3` を確認し、引き継ぎ・仕様・開発ルールと照合。
+- `83719df`：`docs/WINDOWS_ACCEPTANCE_TESTS.md` にWIN-25（単一・複数ノードのBackspace/Delete削除、キャンセル、Undo、入力欄保護）とWIN-26（右側再生順一覧のドラッグ、Escape、上下ボタン、矢印キー、Undo/Redo、保存・再読込）を追加。
+- 受け入れケースは26件。過去のユーザー報告に基づくPASSが11件、未検証が15件。今回の2件はテスト定義のみで**実機未実行**。
+- `0303946` のPlaywright E2E PASSは確認済みだが、`2031009` と `64614c7` 以降の変更を含む最新HEADのE2E、Windowsビルド、実機操作、GitHub Actionsは未確認。
+- 次はWindows側で `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build`。実機ではWIN-04・08・14〜17・25・26を優先し、結果を記録する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
