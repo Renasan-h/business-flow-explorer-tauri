@@ -418,7 +418,7 @@ try {
   await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
   // 既存YAMLの読み込み直後も、負座標・可変サイズのノード群を中心表示する。
   let savedScenarioForReload = null;
-  await page.route('**/scenarios/order-processing.yaml', async route => {
+  await page.route('**/scenarios/0/order-processing.yaml', async route => {
     const scenario = savedScenarioForReload ?? parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
     // 往路と復路の設定が保存・再読込を経ても失われないことを検証する。
     scenario.steps[0].bidirectional = true;
@@ -436,7 +436,7 @@ try {
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: stringify(scenario) });
   });
   // シナリオ一覧をテスト対象の1件に限定し、選択状態に依存せず読み込む。
-  await page.route('**/scenarios/manifest.json', route => route.fulfill({ json: ['/scenarios/order-processing.yaml'] }));
+  await page.route('**/scenarios/0/manifest.json', route => route.fulfill({ json: ['/scenarios/0/order-processing.yaml'] }));
   await page.reload();
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
   await page.getByRole('button', { name: /フローを編集/ }).click();
