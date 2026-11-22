@@ -288,6 +288,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `96fc7e1`：E2Eのmanifest/YAMLモックURLを `/scenarios/0/` に修正し、manifestの返却値も同じURLに統一。
 - Node.js `DEP0190` 警告は引き続き別件。**修正後E2E・ビルド・Windows実機・GitHub Actionsは未実行。** Windows側の再実行ログを待つ。
 
+## 9.17 Windows E2E PASSとNode.js警告対策（2026-11-22）
+
+- 作業開始時HEAD `0303946642e1cdbbb390624c0bb3cbdc13732da9` と引き継ぎ資料を確認。
+- ユーザーのWindows UCRT64環境で `git pull origin develop_tauri` 後、`npm run test:e2e` が `PASS: undo/redo, ... discard navigation` で完了。対象SHAはpullログにより `0303946`。これはPlaywright E2Eの成功であり、Windows Tauri実機やGitHub Actionsの成功ではない。
+- 実行時にNode.js v24の `DEP0190` 警告（`spawn(..., {shell:true})`）が残存。
+- `2031009`：`scripts/test-editor-e2e.mjs` で `npm_execpath` がある場合、`process.execPath` からnpm CLIを直接起動し、`shell:true` を除去。未設定時はOS別の起動経路を用意。
+- **警告対策後のE2E・ビルド・Windows実機・GitHub Actionsは未実行。** 次はWindows側で `npm run test:e2e` を再実行し、警告の消失とPASSを確認する。別途 `npm run build` と実機受け入れ試験の残ケースを進める。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
