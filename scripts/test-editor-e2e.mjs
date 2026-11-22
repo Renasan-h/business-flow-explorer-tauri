@@ -418,6 +418,18 @@ try {
   if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiBefore)) throw new Error('Multi drag cancellation created an extra history entry');
   await page.keyboard.press('Control+y');
   if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag redo failed after cancellation');
+  // 複数選択ノードのDeleteは一括削除・一括Undoとなり、確認キャンセルでは変更しない。
+  await page.getByRole('button', { name: 'すべて選択' }).click();
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  await page.evaluate(() => document.activeElement?.blur());
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.keyboard.press('Backspace');
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Multi-node Backspace cancellation removed actors');
+  page.once('dialog', dialog => dialog.accept());
+  await page.keyboard.press('Delete');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Multi-node Delete did not remove all selected actors');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Multi-node Delete was not restored by one Undo');
   await page.getByRole('button', { name: '再生画面へ戻る' }).click();
   await page.getByRole('dialog', { name: '未保存の変更があります' }).waitFor();
   await page.getByRole('button', { name: '編集を続ける' }).click();
