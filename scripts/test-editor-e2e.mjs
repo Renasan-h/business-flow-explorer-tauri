@@ -257,6 +257,17 @@ try {
   // 後続のドラッグ検証はノード1件の状態で行う。
   await page.keyboard.press('Control+z');
   if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not restore single-actor state');
+  // 選択ノードはBackspace/Deleteで削除でき、確認キャンセルとUndoも機能する。
+  const keyboardNode = page.locator('[data-actor-id]').first();
+  await keyboardNode.locator('rect').first().click();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.keyboard.press('Backspace');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Backspace cancellation deleted the actor');
+  page.once('dialog', dialog => dialog.accept());
+  await page.keyboard.press('Delete');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Delete did not remove selected actor');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not restore keyboard-deleted actor');
   const node = page.locator('[data-actor-id]').first();
   await node.waitFor();
   for (let i = 0; i < 8; i++) await page.getByRole('button', { name: '−', exact: true }).click();
