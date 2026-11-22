@@ -41,6 +41,8 @@ export default function PlaybackOrderPanel({ steps, selectedStep, onChange, onSe
        onPointerDown={event => {
         if (event.button !== 0) return;
         event.preventDefault();
+        // preventDefaultで通常のフォーカス移動が抑制されるため、Escを受け取れるよう明示的にフォーカスする。
+        event.currentTarget.focus();
         dragRef.current = { id: step.id, pointerId: event.pointerId, startY: event.clientY };
         setDraggedStep(step.id);
         event.currentTarget.setPointerCapture(event.pointerId);
