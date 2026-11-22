@@ -4,7 +4,16 @@ import { parse, stringify } from 'yaml';
 import { readFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const server = spawn('npm', ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { shell: process.platform === 'win32', stdio: 'pipe' });
+// npm経由で起動された場合はnpm CLIのJSエントリポイントをNodeから直接実行する。
+ // Windowsのshell:trueによるDEP0190警告と引数のシェル連結を避ける。
+const npmCli = process.env.npm_execpath;
+const server = npmCli
+  ? spawn(process.execPath, [npmCli, 'run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { stdio: 'pipe' })
+  : spawn(process.platform === 'win32' ? 'cmd.exe' : 'npm',
+      process.platform === 'win32'
+        ? ['/d', '/s', '/c', 'npm run dev:web -- --host 127.0.0.1 --port 4179 --strictPort']
+        : ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'],
+      { stdio: 'pipe' });
 let browser;
 try {
   let ready = false;
