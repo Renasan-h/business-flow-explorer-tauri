@@ -400,9 +400,17 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - この環境から `git ls-remote` を試したが `Could not resolve host: github.com` でローカルclone不可。GitHubコネクタでソース変更・pushは完了したが、**Rustテスト・Windows実機・GitHub Actionsは未実行**。既存のWindows実機未検証15ケースは引き続きNOT RUN。
 - 次は `npm run test:rust` と `npm run check` を実行し、WIN-08・WIN-22・WIN-23などのWindows実機試験に進む。Actionsは手動実行のみ。
 
+## 9.31 WIN-22のパス保護回帰テストを追加（2026-11-23）
+
+- 開始時HEAD `604c2fb6b2dfdcf71a130a89e0ed9b45471fdc62`。引き継ぎ・仕様・開発ルール・Rust実装を確認。
+- `7d29284`：`src-tauri/src/lib.rs` に選択ルート外への読込・新規保存を拒否するWIN-22相当の回帰テストを追加。親ディレクトリ遡り、絶対パス、Windowsドライブ・ストリーム形式を検証し、拒否後の既存ファイル不変も確認する。
+- 既存テストにもパス逸脱検証があるため、今回の追加は読込・保存の一括回帰確認を目的とする。WIN-22実機ケースをPASSに変更しない。
+- `git ls-remote` はDNS名前解決失敗でリポジトリ取得不可。環境に `cargo` がなく、**Rustテスト・cargo check・Windows実機・手動GitHub Actionsは未実行**。
+- 次はRust実行可能な環境で `npm run test:rust` と `npm run check`、その後Windows実機でWIN-08・22・23・16のP0ケースを確認する。
+
 ## 10. 次の作業
 
-**第一候補：性能ベンチマークの実測・Windows実機未検証15ケース・npm依存固定後のテスト。極端な規模だけの性能問題は修正不要。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+**第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
 
 ## 11. ドキュメント運用
 
