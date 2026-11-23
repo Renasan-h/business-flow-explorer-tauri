@@ -224,6 +224,19 @@ export async function loadScenario(path: string): Promise<Scenario> {
  if (!isNativeDraft && result.actors.length < 2) throw new Error('actorは2件以上必要です');
  if (!isNativeDraft && result.steps.length === 0) throw new Error('stepは1件以上必要です');
  const ids = new Set(result.actors.map(item => item.id));
+ const groupIds = new Set<string>();
+ for (const group of result.root.groups ?? []) {
+  if (groupIds.has(group.id)) throw new Error('領域IDが重複しています: ' + group.id);
+  groupIds.add(group.id);
+  for (const memberId of group.memberIds ?? []) {
+   if (!ids.has(memberId)) throw new Error(`領域 "${group.id}" の所属actorが存在しません: ${memberId}`);
+  }
+ }
+ const interfaceIds = new Set<string>();
+ for (const definition of result.root.interfaces ?? []) {
+  if (interfaceIds.has(definition.id)) throw new Error('IF定義IDが重複しています: ' + definition.id);
+  interfaceIds.add(definition.id);
+ }
  const stepIds = new Set<string>();
  for (const item of result.steps) {
   if (stepIds.has(item.id)) throw new Error('step IDが重複しています: ' + item.id);
