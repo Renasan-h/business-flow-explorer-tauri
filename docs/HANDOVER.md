@@ -341,6 +341,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - 未検証Windows実機15ケース（WIN-04、08、14〜26）の優先順をリスク台帳に記録。**実機15ケースは未実施**。Windows側でケース別結果を収集し、FAILを優先修正する。
 - 次はnpm/Rustの監査結果を収集し、CSP設定とYAML/ファイル境界テストを検討。セキュリティの指摘は確定脆弱性と未検証リスクを混同しない。
 
+## 9.24 シナリオフォルダ探索のリソース上限（2026-11-23）
+
+- 作業開始時HEAD `ae8ba42e4eb0841ca5ef2b42676166990b54ef77`。引き継ぎ・仕様・開発ルール・セキュリティ台帳とGitHub実装を照合。
+- `563f68a`：`src-tauri/src/lib.rs` のYAML列挙処理に深さ32階層、探索項目50,000件、YAML10,000件の上限を追加。超過時に日本語エラーを返す。上限境界を確認するRust単体テスト2件を追加。
+- `1669773`：`docs/SECURITY_RISK_REGISTER.md` のAPP-03を「対策実装済み／テスト未実行」に更新。
+- ユーザー報告では以前の `npm run test:e2e` と `npm run build` はエラーなし。**今回のRust変更後の `cargo test`、`cargo check`、Windows実機15ケース、GitHub Actionsは未実行**。
+- 次は `npm run test:rust` と `npm run check` を実行し、Windows実機で巨大フォルダ・上限エラー表示と未検証15ケースを確認。引き続きCSPとYAML参照展開の負荷対策、npm/Rust依存監査を進める。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケースの実施・不具合修正、および `docs/SECURITY_RISK_REGISTER.md` に基づくnpm/Rust監査とリスク低減。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
