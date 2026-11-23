@@ -32,7 +32,10 @@ try {
     await delay(1000);
   }
   if (!ready) throw new Error(`Vite server did not start within 60 seconds.\n${serverOutput}`);
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+  });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -107,6 +110,27 @@ try {
       await mustReject('deep-0.yaml', '上限(32)');
     } finally {
       window.__TAURI_INTERNALS__ = originalInternals;
+    }
+  });
+
+  // WIN-15: 分岐切替で通信と専用ノードを除外し、合流先は残す。
+  await page.evaluate(async () => {
+    const { playbackActors, playbackSteps } = await import('/src/branchPlayback.ts');
+    const actors = ['decision', 'a', 'b', 'shared'].map(id => ({
+      id, type: id === 'decision' ? 'decision' : 'server',
+    }));
+    const steps = [
+      ['a-start', 'decision', 'a'], ['b-start', 'decision', 'b'],
+      ['a-end', 'a', 'shared'], ['b-end', 'b', 'shared'],
+    ].map(([id, from, to]) => ({ id, actions: [{ from, to }] }));
+    for (const branch of ['a', 'b']) {
+      const choices = { decision: branch + '-start' };
+      const stepIds = playbackSteps(actors, steps, choices).map(step => step.id);
+      const actorIds = playbackActors(actors, steps, choices).map(actor => actor.id);
+      if (stepIds.join() !== branch + '-start,' + branch + '-end' ||
+          actorIds.join() !== 'decision,' + branch + ',shared') {
+        throw new Error('WIN-15: unexpected steps or actors for branch ' + branch);
+      }
     }
   });
 
@@ -524,25 +548,78 @@ try {
   let savedScenarioForReload = null;
   await page.route('**/scenarios/0/order-processing.yaml', async route => {
     const scenario = savedScenarioForReload ?? parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
-    // 往路と復路の設定が保存・再読込を経ても失われないことを検証する。
-    scenario.steps[0].bidirectional = true;
-    scenario.steps[0].reverseFrom = 'order';
-    scenario.steps[0].reverseTo = 'customer';
-    scenario.steps[0].reversePayload = '注文受付結果';
-    scenario.actors[0].position = { x: -1800, y: -950 };
-    scenario.actors[0].width = 360;
-    scenario.actors[0].height = 220;
-    scenario.actors[1].position = { x: 1200, y: 750 };
-    scenario.actors[1].width = 180;
-    scenario.actors[1].height = 80;
-    scenario.actors[2].position = { x: -500, y: 250 };
-    scenario.actors[3].position = { x: 300, y: -300 };
+    if (!savedScenarioForReload) {
+      scenario.steps[0].actions[0].durationMs = 900;
+      for (const step of scenario.steps.slice(1)) step.actions[0].durationMs = 100;
+      scenario.steps[0].bidirectional = true;
+      scenario.steps[0].reverseFrom = 'order';
+      scenario.steps[0].reverseTo = 'customer';
+      scenario.steps[0].reversePayload = '注文受付結果';
+      scenario.actors[0].position = { x: -1800, y: -950 };
+      scenario.actors[0].width = 360;
+      scenario.actors[0].height = 220;
+      scenario.actors[1].position = { x: 1200, y: 750 };
+      scenario.actors[1].width = 180;
+      scenario.actors[1].height = 80;
+      scenario.actors[2].position = { x: -500, y: 250 };
+      scenario.actors[3].position = { x: 300, y: -300 };
+    }
     await route.fulfill({ status: 200, contentType: 'text/yaml', body: stringify(scenario) });
   });
   // シナリオ一覧をテスト対象の1件に限定し、選択状態に依存せず読み込む。
   await page.route('**/scenarios/0/manifest.json', route => route.fulfill({ json: ['/scenarios/0/order-processing.yaml'] }));
   await page.reload();
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  // WIN-23: 正常なYAMLを対照に、実際の読込処理が不正データを拒否することを確認する。
+  const validYaml = parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
+  const invalidScenarios = [
+    ['duplicate-step', scenario => { scenario.steps.push(structuredClone(scenario.steps[0])); }, /step IDが重複/],
+    ['missing-actor', scenario => { scenario.steps[0].actions[0].to = 'missing'; }, /参照先actorが存在しません/],
+    ['waypoint-limit', scenario => { scenario.steps[0].waypoints = Array.from({ length: 101 }, () => ({ x: 0, y: 0 })); }, /waypoints/],
+    ['nonfinite-waypoint', scenario => { scenario.steps[0].reverseWaypoints = [{ x: Infinity, y: 0 }]; }, /reverseWaypoints/],
+  ];
+  for (const [name, corrupt, expectedError] of invalidScenarios) {
+    const scenario = structuredClone(validYaml);
+    corrupt(scenario);
+    const url = '/scenarios/0/' + name + '.yaml';
+    await page.route('**' + url, route => route.fulfill({ contentType: 'text/yaml', body: stringify(scenario) }));
+    const error = await page.evaluate(async path => {
+      const { loadScenario } = await import('/src/scenario.ts');
+      try {
+        await loadScenario(path);
+        return '';
+      } catch (error) {
+        return String(error);
+      }
+    }, url);
+    if (!expectedError.test(error)) throw new Error('WIN-23: ' + name + ': ' + error);
+  }
+
+  // WIN-04/24: 最小ウィンドウ相当の表示領域でも再生操作とステップ移動ができる。
+  await page.setViewportSize({ width: 900, height: 600 });
+  const play = page.getByRole('button', { name: '▶ 再生', exact: true });
+  const pause = page.getByRole('button', { name: /一時停止/ });
+  const previous = page.getByRole('button', { name: /前へ/ });
+  const next = page.getByRole('button', { name: /次へ/ });
+  await page.getByRole('button', { name: '0.5x', exact: true }).click();
+  await page.getByRole('button', { name: '0.5x', exact: true, pressed: true }).waitFor();
+  await play.click();
+  await pause.click();
+  await play.waitFor();
+  await page.getByText('STEP 1 / 5', { exact: true }).waitFor();
+  await next.click();
+  await page.getByText('STEP 2 / 5', { exact: true }).waitFor();
+  await previous.click();
+  await page.getByText('STEP 1 / 5', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '2x', exact: true }).click();
+  await page.getByRole('button', { name: '2x', exact: true, pressed: true }).waitFor();
+  await play.click();
+  await page.getByRole('button', { name: /最初から再生/ }).waitFor({ timeout: 10000 });
+  await page.getByText('STEP 5 / 5', { exact: true }).waitFor();
+  if (await next.isEnabled()) throw new Error('WIN-04: Next remains enabled after the final step');
+  await page.getByRole('button', { name: '↺', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
   const loadedNodes = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => {
@@ -719,6 +796,19 @@ try {
     throw new Error('Undo did not restore reverse waypoint after removal');
   }
 
+  // WIN-17: 編集UIでIF定義と項目を追加し、往路に関連付ける。
+  await page.getByRole('button', { name: '＋ IF定義', exact: true }).click();
+  const interfaceEditor = page.getByRole('dialog', { name: 'IF定義の編集' });
+  await interfaceEditor.getByLabel('名称').fill('注文受付API');
+  await interfaceEditor.getByRole('button', { name: '＋ 項目追加' }).click();
+  await interfaceEditor.locator('label[aria-label="項目名"] input').fill('orderId');
+  await interfaceEditor.getByRole('checkbox', { name: '必須' }).check();
+  await interfaceEditor.getByRole('button', { name: 'IF定義画面を閉じる' }).click();
+  await page.getByRole('button', { name: '1. 注文受付', exact: true }).click();
+  await page.getByLabel('往路IF定義').selectOption({ label: '注文受付API' });
+
+  // WIN-26: 後続2件の変更順を保存し、再読込後の再生画面で確認する。
+  await playbackRows.nth(2).getByRole('button', { name: '上へ' }).click();
   // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
   // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
   // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
@@ -741,8 +831,8 @@ try {
     throw new Error('Downloaded YAML did not preserve negative actor coordinates');
   }
   await page.getByText('YAMLをダウンロードしました。', { exact: false }).waitFor();
-  if (downloadedScenario.steps.map(step => step.id).join(',') !== 'receive,stock,stock-result,pay,done') {
-    throw new Error('YAML save changed playback order after Undo');
+  if (downloadedScenario.steps.map(step => step.id).join(',') !== 'receive,stock-result,stock,pay,done') {
+    throw new Error('YAML save lost the reordered steps');
   }
   const bidirectionalStep = downloadedScenario.steps.find(step => step.id === 'receive');
   if (!bidirectionalStep || bidirectionalStep.bidirectional !== true ||
@@ -760,6 +850,18 @@ try {
   savedScenarioForReload = downloadedScenario;
   await page.reload();
   await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  const reloadedTitles = await page.locator('.steps button').allTextContents();
+  if (reloadedTitles.join() !== downloadedScenario.steps.map((step, index) => (index + 1) + '. ' + step.title).join()) {
+    throw new Error('WIN-26: playback order differs from the saved YAML');
+  }
+  // WIN-17: 保存したYAMLを再読込し、往路リンクから定義と項目を開けることを確認する。
+  await page.getByRole('button', { name: '往路IF: 注文受付API' }).click();
+  const definition = page.getByRole('dialog', { name: 'IF定義' });
+  await definition.getByRole('heading', { name: '注文受付API' }).waitFor();
+  await definition.getByText(/orderId.*string.*必須/).waitFor();
+  await definition.getByRole('button', { name: 'IF定義を閉じる' }).click();
+  await definition.waitFor({ state: 'hidden' });
+
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
   await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
@@ -774,7 +876,9 @@ try {
   if (!roundTripStep || roundTripStep.bidirectional !== true ||
       roundTripStep.reverseFrom !== 'order' ||
       roundTripStep.reverseTo !== 'customer' ||
-      roundTripStep.reversePayload !== '注文受付結果') {
+      roundTripStep.reversePayload !== '注文受付結果' ||
+      JSON.stringify(roundTripStep.waypoints) !== JSON.stringify(bidirectionalStep.waypoints) ||
+      JSON.stringify(roundTripStep.reverseWaypoints) !== JSON.stringify(bidirectionalStep.reverseWaypoints)) {
     throw new Error('Bidirectional communication settings changed after YAML reload and save');
   }
 

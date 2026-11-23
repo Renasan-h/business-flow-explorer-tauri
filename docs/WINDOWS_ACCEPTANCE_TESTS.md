@@ -91,3 +91,27 @@ FAILの再現手順・スクリーンショット:
 その他の `WIN-04`、`WIN-08`、`WIN-14`〜`WIN-24` は **NOT RUN / 結果未提出**。当時の24ケース中11件PASS、13件未検証。2026-11-22にWIN-25・26を追加したため、**現行26ケースでは11件PASS（過去のユーザー報告）、15件未検証**。FAIL報告は0件だが、全件PASSではない。
 
 次の確認優先度：WIN-04（再生）、WIN-08（既存保存）、WIN-14〜17（双方向・分岐・サブシナリオ・IF）、WIN-18〜23（編集・パス保護・データ整合）、WIN-24（ウィンドウ）、WIN-25（削除キー）、WIN-26（再生順一覧）。GitHub Actionsは別途最新SHAでの手動実行が必要。
+
+## 2026-11-24 残15件の自動検証状況
+
+開始時HEAD `e60225e0fef4865effa8270ae7b88e2767804b62`。実行環境はLinux x86_64。Windows 11実機とWebView2上のアプリを操作できる環境がなかったため、この表のWindows受け入れ結果は全件NOT RUN。
+
+| ID | Windows受け入れ | 自動検証の範囲と今回の結果 |
+| --- | --- | --- |
+| WIN-04 | NOT RUN | Playwrightに再生・一時停止・速度選択・前後ステップ・最終停止を追加。未実施 |
+| WIN-08 | NOT RUN | 既存Rustの保存・再読込・他ファイル不変とPlaywrightの既存YAML保存を確認。今回未実施 |
+| WIN-14 | NOT RUN | 既存の往復経由点・保存試験に、保存YAMLを補正せず再読込する検証を追加。画面上の往復アニメーションは未確認 |
+| WIN-15 | NOT RUN | A/B両方で専用ノード・後続通信が除外され、合流先が残ることを実装関数で検証。Node経由で成功。画面の分岐操作は未実施 |
+| WIN-16 | NOT RUN | 同梱YAML・参照深さ・循環・ルート外参照のNode検証は成功。参照展開順・共通ActorのPlaywright検証は今回未実施 |
+| WIN-17 | NOT RUN | IF定義の作成・項目追加・往路紐付け・保存後の定義表示をPlaywrightに追加。未実施 |
+| WIN-18 | NOT RUN | 既存PlaywrightのUndo/Redo・ドラッグ履歴。今回未実施 |
+| WIN-19 | NOT RUN | 既存Playwrightの30%縮尺ドラッグ。今回未実施 |
+| WIN-20 | NOT RUN | 既存Playwrightの負座標・可変サイズの初期中央表示。今回未実施 |
+| WIN-21 | NOT RUN | 既存Playwrightの複数選択後の一括移動とUndo/Redo。今回未実施。範囲・Shift選択の個別操作は残る |
+| WIN-22 | NOT RUN | 既存Rustのルート外読込・更新・新規保存拒否。今回未実施 |
+| WIN-23 | NOT RUN | 重複step ID・存在しないActor参照・経由点101件・非有限値の読込拒否を追加。Nodeから実装を呼び出して4件成功。編集画面からの保存拒否は未実施 |
+| WIN-24 | NOT RUN | 最小サイズ相当（900 × 600）のブラウザ再生操作を追加。今回未実施。Windowsの最大化・ネイティブリサイズは未実施 |
+| WIN-25 | NOT RUN | 既存Playwrightの単一・複数削除キー、キャンセル、Undo、入力欄保護。今回未実施 |
+| WIN-26 | NOT RUN | 既存のドラッグ、キャンセル、矢印キー、Undo/Redoに、変更後の順序を保存し再読込後の再生一覧で比較する検証を追加。未実施 |
+
+`npm run test:unit` は成功。Playwright用Chromiumの取得はHTTP 403、`PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e` はChromium起動時のソケット作成拒否で、テスト開始前に終了した。Rustテストと `cargo check` はCargo未導入のため実行不可。GitHub Actionsは起動していない。
