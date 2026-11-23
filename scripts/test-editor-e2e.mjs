@@ -53,10 +53,10 @@ try {
         steps: [transfer('first'), { file: 'nested.yaml' }, transfer('last')],
       }],
       ['actors.yaml', { actors: [
-        { id: 'a', name: 'A', type: 'system' },
-        { id: 'b', name: 'B', type: 'system' },
+        { id: 'a', name: 'A', type: 'server' },
+        { id: 'b', name: 'B', type: 'server' },
       ] }],
-      ['nested.yaml', { actors: [{ id: 'a', name: 'A', type: 'system' }], steps: [
+      ['nested.yaml', { actors: [{ id: 'a', name: 'A', type: 'server' }], steps: [
         transfer('middle'),
       ] }],
       ['cycle-a.yaml', { schemaVersion: '1.0', metadata: { id: 'cycle', title: 'cycle', description: '', category: 'test' }, steps: [{ file: 'cycle-b.yaml' }] }],
