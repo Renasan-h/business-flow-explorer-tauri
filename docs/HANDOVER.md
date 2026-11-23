@@ -445,6 +445,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **未実行**：Playwright、TypeScriptビルド、Rust、Windows実機、GitHub Actions。WIN-16のWindows受け入れはNOT RUNのまま。Playwrightのモックは実機Rust APIの動作を保証しない。
 - 次は`npm run test:e2e`、`npm run test:unit`、`npm run test:rust`、`npm run check`を実行し、失敗時に修正する。CIは手動実行のみ。
 
+## 9.37 WIN-16 共通Actor定義矛盾の回帰ケース（2026-11-24）
+
+- 開始時HEAD `b433a8b044e15625d3eada9855b2c845f7a4dc47`。引き継ぎ・仕様・開発ルール・シナリオ読込実装・Playwrightコードを確認。
+- `d3325a8`：`scripts/test-editor-e2e.mjs` の実装経由WIN-16テストに、複数参照ファイルで同一Actor IDの`name`が矛盾した場合の拒否検証を追加。
+- この環境ではNode.js 22とnpmは利用可能だが、GitHubリポジトリのローカル作業ツリーはなく、従来の直接取得はDNSエラー。Rustの`cargo`も未導入。したがって**Playwright・単体テスト・Rustテスト・Windows実機・GitHub Actionsは未実行**。テストのPASSは未確認。
+- 次はソース一式を取得できる実行環境で`npm ci`、`npx playwright install chromium`、`npm run test:e2e`、`npm run test:unit`を実行して失敗を修正する。WIN-16実機受け入れはNOT RUNのまま。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
