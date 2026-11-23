@@ -408,6 +408,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `git ls-remote` はDNS名前解決失敗でリポジトリ取得不可。環境に `cargo` がなく、**Rustテスト・cargo check・Windows実機・手動GitHub Actionsは未実行**。
 - 次はRust実行可能な環境で `npm run test:rust` と `npm run check`、その後Windows実機でWIN-08・22・23・16のP0ケースを確認する。
 
+## 9.32 WIN-23 YAML数値検証の強化（2026-11-24）
+
+- 開始時HEAD `febb229be83a01c2ff3d30b4d474774a89643cb1`。引き継ぎ・仕様・開発ルール・`src/scenario.ts`・既存参照テストを確認。
+- `57c42d2`：`src/scenario.ts` のZod検証でノード位置（x/y）、通信時間（durationMs）、領域サイズ（width/height）に `.finite()` を追加。Infinity / -Infinity / NaN 等の非有限値を読込時に拒否する。既存のwaypointsは既に有限値検証あり。
+- これはWIN-23の一部の内部処理対策であり、Windows実機のWIN-23をPASSにはしない。既存の正常YAMLに対する回帰テスト・E2E・Rustテスト・GitHub Actionsは未実行。
+- 次は `npm run test:unit`、`npm run test:e2e`、`npm run test:rust`、`npm run check` を実行し、WIN-23とWIN-16を実機で確認する。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
