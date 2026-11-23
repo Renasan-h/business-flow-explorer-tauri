@@ -318,6 +318,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **変更後のE2Eは未実行。** ユーザー報告で確認済みなのは旧HEAD `0303946` のPASSのみ。最新版のE2E・Windows Tauriビルド・受け入れ試験・手動CIは引き続き未検証。
 - 次はWindows環境で `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build` を実行し、ログに削除キー検証が出ることとPASSを確認。続いてWIN-04・08・14〜17・25・26を実機確認。
 
+## 9.21 E2E開発サーバー起動失敗時の診断改善（2026-11-23）
+
+- 作業開始時HEAD `a31ab7a879cc8ca0bf28f0277a8eeaa2a5de559b` を確認し、仕様・開発ルール・引き継ぎ資料と照合。
+- `30973c2`：`scripts/test-editor-e2e.mjs` のVite起動監視にプロセスのerror/exitイベントとstdout/stderr末尾8KBの収集を追加。起動失敗・60秒タイムアウト時に診断ログを表示する。
+- **変更後のE2E・ビルド・Windows実機・GitHub Actionsは未実行。** 最後に確認されたPlaywright PASSはユーザー実行の旧HEAD `0303946`。
+- 次はWindowsで `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build` を実行し、WIN-04・08・14〜17・25・26の実機結果を収集する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
