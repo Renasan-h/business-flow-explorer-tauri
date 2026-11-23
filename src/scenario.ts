@@ -131,6 +131,8 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
   throw new Error('シナリオの参照先が選択中のルート外です: ' + canonical);
  }
  if (ancestors.has(canonical)) throw new Error('シナリオの循環参照: ' + [...ancestors, canonical].join(' → '));
+ // 悪意のある/誤設定された深い参照チェーンによる再帰負荷を制限する。
+ if (ancestors.size >= 32) throw new Error('シナリオの参照階層が上限(32)を超えています: ' + canonical);
  const nextAncestors = new Set([...ancestors, canonical]);
  const relative = canonical.startsWith('/scenarios/native/') ? canonical.slice('/scenarios/native/'.length) : null;
  let yaml: string;
