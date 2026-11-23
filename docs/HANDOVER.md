@@ -415,6 +415,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - これはWIN-23の一部の内部処理対策であり、Windows実機のWIN-23をPASSにはしない。既存の正常YAMLに対する回帰テスト・E2E・Rustテスト・GitHub Actionsは未実行。
 - 次は `npm run test:unit`、`npm run test:e2e`、`npm run test:rust`、`npm run check` を実行し、WIN-23とWIN-16を実機で確認する。
 
+## 9.33 WIN-23 領域・IF定義の整合性検証（2026-11-24）
+
+- 開始時HEAD `7cd2fe17d1de9cc1325c8f981f0d10d71cfe4d70`。引き継ぎ・仕様・開発ルール・`src/scenario.ts` と既存の断片テストを確認。
+- `a7eaa50`：`loadScenario` にルートYAMLの領域ID重複、IF定義ID重複、領域の存在しない所属Actor参照の検証を追加。WIN-23のデータ整合性を強化。
+- 注意：現行の`readFragments`は参照先のgroups/interfacesを統合しない。今回の検証は親YAMLの定義のみが対象。サブシナリオ参照（WIN-16）の実機確認は別途必要。
+- **TypeScriptビルド・E2E・Rustテスト・Windows実機・GitHub Actionsは未実行。** 既存のWindows未検証15ケースは変わらない。
+- 次は実行可能な環境で`npm run test:unit`・`npm run test:e2e`、Rustテストを行い、WIN-16の参照展開・順序・循環・ルート境界を確認する。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
