@@ -332,9 +332,18 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **修正後のE2E・ビルド・Windows実機・GitHub Actionsは未実行。** 最後に確認されたE2E PASSは旧HEAD `0303946`。
 - 次はWindows側で `npm run test:e2e` と `npm run build` を実行。実機WIN-04・08・14〜17・25・26を優先し、結果に応じて修正する。
 
+## 9.23 Windows実機検証とセキュリティ調査の着手（2026-11-23）
+
+- 作業開始時HEAD `1fbd775191111b3693596b6d885e23d754f323a7` を確認し、`docs/HANDOVER.md`、`docs/SPECIFICATION.md`、`docs/DEVELOPMENT_RULES.md`、実装・依存定義・受け入れケースを照合。
+- ユーザーより前回の `npm run test:e2e` と `npm run build` がともに**エラーなし**と報告された。対象SHAを明示したログは未提出のため、実行対象SHAの確定は保留。Windows実機操作・GitHub Actionsの成功とは区別する。
+- `55ca93d`：`docs/SECURITY_RISK_REGISTER.md` を新規作成。CSP無効設定、Rustファイル操作の差し替え競合、YAML参照展開・ディレクトリ列挙の負荷、バックアップ、Tauri権限、依存監査・Actionタグ参照を初期リスクとして整理。
+- `package-lock.json` は存在。GitHubから `src-tauri/Cargo.lock` を取得しようとしたところ404で、対象ブランチに存在することを確認できなかった。npm audit・RustSec監査は未実行であり、**CVE件数は未確定**。
+- 未検証Windows実機15ケース（WIN-04、08、14〜26）の優先順をリスク台帳に記録。**実機15ケースは未実施**。Windows側でケース別結果を収集し、FAILを優先修正する。
+- 次はnpm/Rustの監査結果を収集し、CSP設定とYAML/ファイル境界テストを検討。セキュリティの指摘は確定脆弱性と未検証リスクを混同しない。
+
 ## 10. 次の作業
 
-**第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+**第一候補：Windows実機未検証15ケースの実施・不具合修正、および `docs/SECURITY_RISK_REGISTER.md` に基づくnpm/Rust監査とリスク低減。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
 
 ## 11. ドキュメント運用
 
@@ -345,6 +354,7 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `docs/DEVELOPMENT_RULES.md`：継続開発のルール。
 - `docs/HANDOVER.md`：最新の進捗、検証状況、残作業、次の一手。
 - `docs/WINDOWS_ACCEPTANCE_TESTS.md`：Windows実機の受け入れ試験と結果記録様式。
+- `docs/SECURITY_RISK_REGISTER.md`：アプリ固有・依存ライブラリのリスク台帳と監査計画。
 - `docs/RELEASE_NOTES_v0.1.0.md`：初回リリースノート案。
 - `docs/WINDOWS_CODE_SIGNING.md`：コード署名の判断・保護・検証方針。
 
