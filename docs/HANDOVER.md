@@ -438,6 +438,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **テストは未実行**。TypeScriptビルド・E2E・Rustテスト・GitHub Actionsも未実行。WIN-16の実機受け入れはNOT RUNのまま。
 - 次はNodeが使える環境で `npm run test:unit` を実行し、Playwrightで参照展開順序と実装側の境界動作を検証する。
 
+## 9.36 WIN-16 実装経由のPlaywright回帰テスト（2026-11-24）
+
+- 開始時HEAD `e39adc1494773362b4078814a3e8846360f829dc`。引き継ぎ・仕様・開発ルール・開発ガイド・既存Playwrightテスト・シナリオ読込実装を確認。
+- `a2f5e0b`、`657f085`：`scripts/test-editor-e2e.mjs` にブラウザ内で実際の`src/scenario.ts`をimportするWIN-16回帰テストを追加。Tauriの`read_scenario_file`のみモックし、親YAMLと断片のステップ展開順、重複Actor統合、循環参照、ルート外参照、32階層制限を検証。Actor種別は`src/nodeCatalog.ts`に存在する`server`を使用。
+- **未実行**：Playwright、TypeScriptビルド、Rust、Windows実機、GitHub Actions。WIN-16のWindows受け入れはNOT RUNのまま。Playwrightのモックは実機Rust APIの動作を保証しない。
+- 次は`npm run test:e2e`、`npm run test:unit`、`npm run test:rust`、`npm run check`を実行し、失敗時に修正する。CIは手動実行のみ。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
