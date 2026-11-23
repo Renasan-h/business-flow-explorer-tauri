@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import { spawn } from 'node:child_process';
 import { stringify } from 'yaml';
+import { writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // 実際のsrc/scenario.tsのYAML解析・参照展開・配置処理をブラウザ上で計測する。
@@ -12,6 +13,11 @@ const sizes = [
   { label: 'extreme-reference', actors: 5000, steps: 10000 },
 ];
 const selected = process.argv.includes('--extreme') ? sizes : sizes.slice(0, 3);
+const outputIndex = process.argv.indexOf('--output');
+if (outputIndex >= 0 && !process.argv[outputIndex + 1]) {
+  throw new Error('--outputには保存先ファイル名が必要です');
+}
+const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
 const npmCli = process.env.npm_execpath;
 const server = npmCli
   ? spawn(process.execPath, [npmCli, 'run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4180', '--strictPort'], { stdio: 'pipe' })
@@ -75,9 +81,14 @@ try {
       yamlBytes: Buffer.byteLength(yaml), runsMs: times, medianMs: times[1] });
     await page.unroute('**/scenarios/0/performance.yaml');
   }
-  console.log(JSON.stringify({ measuredAt: new Date().toISOString(),
+  const report = JSON.stringify({ measuredAt: new Date().toISOString(),
     platform: process.platform, node: process.version, scope: 'YAML loadScenario only',
-    results }, null, 2));
+    results }, null, 2);
+  console.log(report);
+  if (outputPath) {
+    await writeFile(outputPath, report + '\n', 'utf8');
+    console.log(`性能測定結果を保存しました: ${outputPath}`);
+  }
 } finally {
   await browser?.close();
   if (server.pid) {
