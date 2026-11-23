@@ -15,13 +15,23 @@ const server = npmCli
         : ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'],
       { stdio: 'pipe' });
 let browser;
+let serverFailure;
+let serverOutput = '';
+server.on('error', error => { serverFailure = error; });
+server.on('exit', (code, signal) => {
+  if (!serverFailure) serverFailure = new Error(`Vite process exited (code=${code}, signal=${signal})`);
+});
+for (const stream of [server.stdout, server.stderr]) {
+  stream?.on('data', chunk => { serverOutput = (serverOutput + chunk.toString()).slice(-8000); });
+}
 try {
   let ready = false;
   for (let i = 0; i < 60; i++) {
+    if (serverFailure) throw new Error(`Vite server failed: ${serverFailure.message}\\n${serverOutput}`);
     try { const response = await fetch('http://127.0.0.1:4179/'); if (response.ok) { ready = true; break; } } catch {}
     await delay(1000);
   }
-  if (!ready) throw new Error('Vite server did not start');
+  if (!ready) throw new Error(`Vite server did not start within 60 seconds.\\n${serverOutput}`);
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
