@@ -27,11 +27,11 @@ for (const stream of [server.stdout, server.stderr]) {
 try {
   let ready = false;
   for (let i = 0; i < 60; i++) {
-    if (serverFailure) throw new Error(`Vite server failed: ${serverFailure.message}\\n${serverOutput}`);
+    if (serverFailure) throw new Error(`Vite server failed: ${serverFailure.message}\n${serverOutput}`);
     try { const response = await fetch('http://127.0.0.1:4179/'); if (response.ok) { ready = true; break; } } catch {}
     await delay(1000);
   }
-  if (!ready) throw new Error(`Vite server did not start within 60 seconds.\\n${serverOutput}`);
+  if (!ready) throw new Error(`Vite server did not start within 60 seconds.\n${serverOutput}`);
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
@@ -710,11 +710,13 @@ try {
   console.log('PASS: single/multi-node Backspace/Delete cancel, delete and Undo, undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, playback order undo/redo and YAML order, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
 } finally {
   if (browser) await browser.close();
-  if (process.platform === 'win32') {
-    const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], { stdio: 'ignore' });
-    await new Promise(resolve => killer.once('close', resolve));
-  } else {
-    server.kill('SIGTERM');
+  if (server.pid) {
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], { stdio: 'ignore' });
+      await new Promise(resolve => { killer.once('close', resolve); killer.once('error', resolve); });
+    } else {
+      server.kill('SIGTERM');
+    }
   }
   server.stdout?.destroy();
   server.stderr?.destroy();
