@@ -368,6 +368,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **今回のベンチマークは未実行。** 測定対象はYAML読込・検証・配置であり、GUI描画・ズーム・移動・再生・保存・参照展開・Rustのフォルダ探索は別途計測が必要。
 - 次はWindows開発環境で `npm ci`、`npm run benchmark:scenario`、`npm run test:e2e`、`npm run build:web` を実行して測定結果を記録。通常規模での異常があれば原因を調べて修正する。
 
+## 9.27 性能ベンチマークの結果保存と実行環境の制約（2026-11-23）
+
+- 開始時HEAD `7ea14f802ca411b5c74548af01b34aade07d631e`。引き継ぎ・仕様・開発ルールとベンチマークのソースを確認。
+- `e093eab`：`scripts/benchmark-scenario-load.mjs` に `--output <file>` を追加し、JSON形式の測定結果をファイル保存できるようにした。
+- 実行環境から `git clone` を試みたが `Could not resolve host: github.com` で失敗。**今回のベンチマーク・npm ci・E2E・Rustテスト・Windows実機・GitHub Actionsは未実行**。実測値やPASSを推測しない。
+- Windowsで `npm run benchmark:scenario -- --output benchmark-result.json` を実行すると測定日時・OS・Node・各規模の中央値を記録できる。結果を比較し、通常規模で問題がある場合にのみ改善する。
+- GUI描画・移動・再生・保存は当該ベンチマークの対象外。Windows実機の受け入れケースと併せて検証する。
+
 ## 10. 次の作業
 
 **第一候補：性能ベンチマークの実測・Windows実機未検証15ケース・npm依存固定後のテスト。極端な規模だけの性能問題は修正不要。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
