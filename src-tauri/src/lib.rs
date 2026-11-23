@@ -60,10 +60,32 @@ fn resolve_existing(root: &Path, relative: &str) -> Result<PathBuf, String> {
     Ok(actual)
 }
 
+// 悪意ある/巨大なフォルダ選択で再帰探索が無制限にならないよう上限を設ける。
+const MAX_SCENARIO_DEPTH: usize = 32;
+const MAX_SCENARIO_ENTRIES: usize = 50_000;
+const MAX_SCENARIO_FILES: usize = 10_000;
+
 fn list_yaml(root: &Path) -> Result<Vec<String>, String> {
-    fn visit(root: &Path, current: &Path, found: &mut Vec<String>) -> Result<(), String> {
+    list_yaml_with_limits(root, MAX_SCENARIO_DEPTH, MAX_SCENARIO_ENTRIES, MAX_SCENARIO_FILES)
+}
+
+fn list_yaml_with_limits(root: &Path, max_depth: usize, max_entries: usize, max_files: usize) -> Result<Vec<String>, String> {
+    fn visit(
+        root: &Path,
+        current: &Path,
+        depth: usize,
+        max_depth: usize,
+        max_entries: usize,
+        max_files: usize,
+        entries: &mut usize,
+        found: &mut Vec<String>,
+    ) -> Result<(), String> {
         for entry in fs::read_dir(current).map_err(|error| error.to_string())? {
             let entry = entry.map_err(|error| error.to_string())?;
+            *entries += 1;
+            if *entries > max_entries {
+                return Err(format!("シナリオフォルダの項目数が上限（{max_entries}件）を超えました"));
+            }
             let kind = entry.file_type().map_err(|error| error.to_string())?;
             // シンボリックリンク経由のディレクトリ外アクセスを禁止する。
             if kind.is_symlink() {
@@ -71,7 +93,10 @@ fn list_yaml(root: &Path) -> Result<Vec<String>, String> {
             }
             let path = entry.path();
             if kind.is_dir() {
-                visit(root, &path, found)?;
+                if depth >= max_depth {
+                    return Err(format!("シナリオフォルダの階層が上限（{max_depth}階層）を超えました"));
+                }
+                visit(root, &path, depth + 1, max_depth, max_entries, max_files, entries, found)?;
             } else if kind.is_file()
                 && matches!(
                     path.extension().and_then(|value| value.to_str())
@@ -79,6 +104,9 @@ fn list_yaml(root: &Path) -> Result<Vec<String>, String> {
                     "yaml" | "yml"
                 )
             {
+                if found.len() >= max_files {
+                    return Err(format!("シナリオファイル数が上限（{max_files}件）を超えました"));
+                }
                 let relative = path.strip_prefix(root).map_err(|error| error.to_string())?;
                 found.push(relative.to_string_lossy().replace('\\', "/"));
             }
@@ -86,7 +114,8 @@ fn list_yaml(root: &Path) -> Result<Vec<String>, String> {
         Ok(())
     }
     let mut found = Vec::new();
-    visit(root, root, &mut found)?;
+    let mut entries = 0;
+    visit(root, root, 0, max_depth, max_entries, max_files, &mut entries, &mut found)?;
     found.sort();
     Ok(found)
 }
@@ -708,6 +737,30 @@ mod tests {
         let temporary_count = fs::read_dir(&root).unwrap().filter_map(Result::ok)
             .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp")).count();
         assert_eq!(temporary_count, 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_excessive_scenario_directory_depth() {
+        let root = std::env::temp_dir().join(format!("bfe-depth-limit-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("a/b")).unwrap();
+        fs::write(root.join("a/b/scenario.yaml"), "metadata: {}").unwrap();
+        assert!(list_yaml_with_limits(&root, 1, 100, 100).unwrap_err().contains("階層"));
+        assert_eq!(list_yaml_with_limits(&root, 2, 100, 100).unwrap(), vec!["a/b/scenario.yaml"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_excessive_scenario_entry_and_file_counts() {
+        let root = std::env::temp_dir().join(format!("bfe-entry-limit-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("first.yaml"), "metadata: {}").unwrap();
+        fs::write(root.join("second.yml"), "metadata: {}").unwrap();
+        assert!(list_yaml_with_limits(&root, 32, 1, 100).unwrap_err().contains("項目数"));
+        assert!(list_yaml_with_limits(&root, 32, 100, 1).unwrap_err().contains("ファイル数"));
+        assert_eq!(list_yaml_with_limits(&root, 32, 100, 2).unwrap().len(), 2);
         fs::remove_dir_all(root).unwrap();
     }
 
