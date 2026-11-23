@@ -339,6 +339,39 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    // WIN-08 / WIN-09: 既存YAMLの保存・再読込と外部更新競合をネイティブ層で検証する。
+    #[test]
+    fn existing_yaml_save_preserves_content_and_rejects_stale_update() {
+        let root = std::env::temp_dir().join(format!(
+            "bfe-existing-save-regression-{}", std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+        let target = root.join("scenario.yaml");
+        let unrelated = root.join("unrelated.yaml");
+        let initial = "schemaVersion: '1.0'\\nmetadata:\\n  title: before\\n";
+        let updated = "schemaVersion: '1.0'\\nmetadata:\\n  title: after\\n";
+        fs::write(&target, initial).unwrap();
+        fs::write(&unrelated, "keep").unwrap();
+
+        let resolved = resolve_existing(&canonical_root, "scenario.yaml").unwrap();
+        replace_yaml_checked(&resolved, updated, Some(initial)).unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), updated);
+        assert_eq!(fs::read_to_string(&unrelated).unwrap(), "keep");
+
+        let error = replace_yaml_checked(&resolved, "stale overwrite", Some(initial)).unwrap_err();
+        assert!(error.contains("保存競合"), "{error}");
+        assert_eq!(fs::read_to_string(&target).unwrap(), updated);
+        assert_eq!(fs::read_to_string(&unrelated).unwrap(), "keep");
+        let mut files: Vec<_> = fs::read_dir(&root).unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        files.sort();
+        assert_eq!(files, vec!["scenario.yaml", "unrelated.yaml"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn readonly_yaml_is_not_overwritten_or_left_with_temporary_files() {
         let root = std::env::temp_dir().join(format!("bfe-readonly-test-{}", std::process::id()));
