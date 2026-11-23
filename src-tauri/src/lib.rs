@@ -773,6 +773,31 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    // WIN-22: 選択ルート外へのパスを更新・作成の双方で拒否し、既存データを守る。
+    #[test]
+    fn selected_root_rejects_outside_read_update_and_create() {
+        let base = std::env::temp_dir().join(format!(
+            "bfe-root-protection-regression-{}", std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&base);
+        let root = base.join("selected");
+        fs::create_dir_all(&root).unwrap();
+        let canonical_root = root.canonicalize().unwrap();
+        let outside = base.join("private.yaml");
+        fs::write(&outside, "private").unwrap();
+        fs::write(root.join("allowed.yaml"), "allowed").unwrap();
+
+        for relative in ["../private.yaml", "nested/../../private.yaml",
+                         "/private.yaml", "C:/private.yaml", "allowed.yaml:stream"] {
+            assert!(resolve_existing(&canonical_root, relative).is_err(), "{relative}");
+            assert!(create_yaml(&canonical_root, relative, "changed").is_err(), "{relative}");
+        }
+        assert_eq!(fs::read_to_string(&outside).unwrap(), "private");
+        assert_eq!(fs::read_to_string(root.join("allowed.yaml")).unwrap(), "allowed");
+        assert_eq!(list_yaml(&canonical_root).unwrap(), vec!["allowed.yaml"]);
+        fs::remove_dir_all(base).unwrap();
+    }
+
     #[test]
     fn rejects_excessive_scenario_directory_depth() {
         let root = std::env::temp_dir().join(format!("bfe-depth-limit-{}", std::process::id()));
