@@ -59,6 +59,13 @@ try {
       ['nested.yaml', { actors: [{ id: 'a', name: 'A', type: 'server' }], steps: [
         transfer('middle'),
       ] }],
+      ['conflict.yaml', {
+        schemaVersion: '1.0',
+        metadata: { id: 'conflict', title: 'conflict', description: '', category: 'test' },
+        actors: [{ file: 'actors.yaml' }, { file: 'conflicting-actors.yaml' }],
+        steps: [transfer('conflict-step')],
+      }],
+      ['conflicting-actors.yaml', { actors: [{ id: 'a', name: 'Different A', type: 'server' }] }],
       ['cycle-a.yaml', { schemaVersion: '1.0', metadata: { id: 'cycle', title: 'cycle', description: '', category: 'test' }, steps: [{ file: 'cycle-b.yaml' }] }],
       ['cycle-b.yaml', { steps: [{ file: 'cycle-a.yaml' }] }],
       ['outside.yaml', { schemaVersion: '1.0', metadata: { id: 'outside', title: 'outside', description: '', category: 'test' }, steps: [{ file: '../outside.yaml' }] }],
@@ -94,6 +101,7 @@ try {
           if (!String(error).includes(expected)) throw error;
         }
       }
+      await mustReject('conflict.yaml', '矛盾');
       await mustReject('cycle-a.yaml', '循環参照');
       await mustReject('outside.yaml', 'ルート外');
       await mustReject('deep-0.yaml', '上限(32)');
