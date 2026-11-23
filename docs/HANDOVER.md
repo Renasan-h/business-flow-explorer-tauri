@@ -349,9 +349,19 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ユーザー報告では以前の `npm run test:e2e` と `npm run build` はエラーなし。**今回のRust変更後の `cargo test`、`cargo check`、Windows実機15ケース、GitHub Actionsは未実行**。
 - 次は `npm run test:rust` と `npm run check` を実行し、Windows実機で巨大フォルダ・上限エラー表示と未検証15ケースを確認。引き続きCSPとYAML参照展開の負荷対策、npm/Rust依存監査を進める。
 
+## 9.25 セキュリティ対応範囲の調整とnpmバージョン固定（2026-11-23）
+
+- 開始時HEAD `fac0dec6625dcea2964f150765e60b8def2712c8`。引き継ぎ・仕様・開発ルール、`package.json` と `package-lock.json` の解決済みバージョンを照合。
+- ユーザー判断により、CSPの設定追加は不要として今回の対象から除外（既存の `csp: null` を維持）。外部バックエンドAPIの有無だけでCSPの効果は決まらないため、将来の外部コンテンツ導入時には再評価。
+- 「大量データ」の意味を、フォルダ内の大量ファイル、1ファイル内の大量ノード・通信、サブシナリオの大量参照の3種類として説明。後2者への上限追加は実測まで見送る。既存のフォルダ探索上限は維持。
+- `26f8cc8`：`package.json` の直接・開発依存13件を `package-lock.json` の現在の解決済みバージョンに完全一致固定。
+- `8c20b60`：`package-lock.json` のルート依存宣言を同期。`83ec02e`：`docs/SECURITY_RISK_REGISTER.md` を更新。
+- **今回の変更後の `npm ci`、E2E、ビルド、Rustテスト、Windows実機、手動GitHub Actionsは未実行。** npm/Rustの既知CVE監査も未実施。
+- 次は `npm ci`、`npm run test:e2e`、`npm run build:web` で依存整合とフロントエンドを確認。Windows実機の残15件を進める。
+
 ## 10. 次の作業
 
-**第一候補：Windows実機未検証15ケースの実施・不具合修正、および `docs/SECURITY_RISK_REGISTER.md` に基づくnpm/Rust監査とリスク低減。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+**第一候補：npm依存固定後のテストとWindows実機未検証15ケースの実施・不具合修正。CSP追加は保留、YAMLの追加上限は実測後に判断。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
 
 ## 11. ドキュメント運用
 
