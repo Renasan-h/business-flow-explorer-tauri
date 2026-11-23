@@ -37,6 +37,71 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('http://127.0.0.1:4179/');
+  // WIN-16: 実際のsrc/scenario.tsをブラウザでimportし、ネイティブ参照展開を検証する。
+  await page.evaluate(async () => {
+    const originalInternals = window.__TAURI_INTERNALS__;
+    const transfer = (id) => ({
+      id, title: id, description: '', actions: [
+        { type: 'transfer', from: 'a', to: 'b', payload: id, durationMs: 100 },
+      ],
+    });
+    const files = new Map([
+      ['parent.yaml', {
+        schemaVersion: '1.0',
+        metadata: { id: 'parent', title: 'parent', description: '', category: 'test' },
+        actors: [{ file: 'actors.yaml' }],
+        steps: [transfer('first'), { file: 'nested.yaml' }, transfer('last')],
+      }],
+      ['actors.yaml', { actors: [
+        { id: 'a', name: 'A', type: 'system' },
+        { id: 'b', name: 'B', type: 'system' },
+      ] }],
+      ['nested.yaml', { actors: [{ id: 'a', name: 'A', type: 'system' }], steps: [
+        transfer('middle'),
+      ] }],
+      ['cycle-a.yaml', { schemaVersion: '1.0', metadata: { id: 'cycle', title: 'cycle', description: '', category: 'test' }, steps: [{ file: 'cycle-b.yaml' }] }],
+      ['cycle-b.yaml', { steps: [{ file: 'cycle-a.yaml' }] }],
+      ['outside.yaml', { schemaVersion: '1.0', metadata: { id: 'outside', title: 'outside', description: '', category: 'test' }, steps: [{ file: '../outside.yaml' }] }],
+    ]);
+    for (let i = 0; i < 33; i++) {
+      files.set(`deep-${i}.yaml`, i === 32 ? { steps: [] } : { steps: [{ file: `deep-${i + 1}.yaml` }] });
+    }
+    files.set('deep-0.yaml', {
+      schemaVersion: '1.0',
+      metadata: { id: 'deep', title: 'deep', description: '', category: 'test' },
+      steps: [{ file: 'deep-1.yaml' }],
+    });
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args) => {
+        if (command !== 'read_scenario_file') throw new Error('Unexpected command: ' + command);
+        const content = files.get(args.relativePath);
+        if (!content) throw new Error('Missing test YAML: ' + args.relativePath);
+        return JSON.stringify(content);
+      },
+    };
+    try {
+      const { loadScenario } = await import('/src/scenario.ts');
+      const scenario = await loadScenario('/scenarios/native/parent.yaml');
+      if (scenario.actors.length !== 2 ||
+          JSON.stringify(scenario.steps.map(step => step.id)) !== JSON.stringify(['first', 'middle', 'last'])) {
+        throw new Error('WIN-16: Actor merge or step order failed');
+      }
+      async function mustReject(path, expected) {
+        try {
+          await loadScenario('/scenarios/native/' + path);
+          throw new Error('WIN-16: unexpected success: ' + path);
+        } catch (error) {
+          if (!String(error).includes(expected)) throw error;
+        }
+      }
+      await mustReject('cycle-a.yaml', '循環参照');
+      await mustReject('outside.yaml', 'ルート外');
+      await mustReject('deep-0.yaml', '上限(32)');
+    } finally {
+      window.__TAURI_INTERNALS__ = originalInternals;
+    }
+  });
+
   // Tauri保存APIをブラウザ上で模擬し、新規作成→再保存→外部競合を検証する。
   // 画面操作のテストとは別に、エディターが利用する保存経路の契約を確認する。
   await page.evaluate(async () => {
