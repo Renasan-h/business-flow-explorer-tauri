@@ -17,6 +17,7 @@
     "test:unit": "npm run build:web && node scripts/check-version.mjs && node scripts/test-scenario-fragments.mjs",
     "test:e2e": "node scripts/test-editor-e2e.mjs",
     "benchmark:scenario": "node scripts/benchmark-scenario-load.mjs",
+    "benchmark:memory": "node scripts/benchmark-memory.mjs",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
     "test:all": "npm run test && npm run check",
     "check:version": "node scripts/check-version.mjs"
