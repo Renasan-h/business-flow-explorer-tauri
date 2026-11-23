@@ -14,7 +14,7 @@
 
 | ID | 優先度 | 対象・根拠 | 状態 | リスクと対応案 |
 | --- | --- | --- | --- | --- |
-| APP-01 | 高 | `src-tauri/tauri.conf.json` の `app.security.csp: null` | 設定確認済み／悪用未検証 | コンテンツセキュリティポリシーが無効。YAML由来の表示や将来の外部コンテンツ連携でスクリプト注入が生じた場合の被害軽減策が不足。TauriのCSP設定を段階的に導入し、PixiJS・Vite・同梱リソースの動作を回帰検証する。 |
+| APP-01 | 対応保留 | `src-tauri/tauri.conf.json` の `app.security.csp: null` | **ユーザー方針で設定維持** | ローカル専用・外部バックエンドAPIなしという利用形態を踏まえ、現時点ではCSPを追加しない。CSPはバックエンドの有無と無関係にXSSの被害軽減に役立つため、外部コンテンツ導入・信頼境界変更時に再評価する。 |
 | APP-02 | 高 | `src-tauri/src/lib.rs` の `resolve_existing`、`replace_yaml_checked` | 要検証 | 読込時のcanonicalize・保存時のsymlink_metadata・保存競合チェックは実装済み。ただしファイル検査から実操作までの外部プロセスによる差し替え競合（TOCTOU）の安全性は未検証。リンク・ディレクトリ差し替えの並行試験とWindowsでの権限検証を追加する。 |
 | APP-03 | 中 | `src-tauri/src/lib.rs` の `list_yaml` | **対策実装済み／テスト未実行** | `563f68a` で深さ32階層、探索項目50,000件、YAML10,000件の上限と境界テストを追加。大量フォルダでの実機負荷、上限時のUI通知、シンボリックリンク差し替え競合は引き続き要検証。 |
 | APP-04 | 中 | `src/scenario.ts` の `readFragments` | 要検証 | 循環参照・ルート逸脱を防止している一方、YAMLの総サイズ・参照展開総数・深さの上限はコード上未確認。多数の異なるサブシナリオでCPU/メモリ負荷が増える懸念。サイズ・深さ・総参照数の制限と回帰テストを追加する。 |
@@ -34,7 +34,7 @@
 | DEP-02 | 高 | Rust crates（Tauriと推移依存） | **未監査** | `cargo install cargo-audit --locked`、`cargo audit --manifest-path src-tauri/Cargo.toml`（利用バージョンの対応可否を確認）でRustSecを照合。検出したadvisoryを記録する。 |
 | DEP-03 | 高 | `src-tauri/Cargo.lock` | **ファイル未確認** | GitHubの対象ブランチではファイル取得時404。Rustの依存再現性を確認し、生成・コミット方針を検討する。ロックファイル不在が即CVEを意味するわけではない。 |
 | DEP-04 | 中 | GitHub ActionsのサードパーティAction | **設定確認済み／未監査** | `actions/checkout@v4`、`actions/setup-node@v4`、`dtolnay/rust-toolchain@stable`、`swatinem/rust-cache@v2`、`actions/upload-artifact@v4` を使用。タグ参照の改変リスクを評価し、可能ならコミットSHA固定・更新手順を導入する。 |
-| DEP-05 | 中 | npmのバージョン範囲・レジストリ取得 | **設定確認済み** | `package-lock.json` は存在する。CI・開発で `npm ci` を使用し、lockfile差分・パッケージ完全性を確認する。 |
+| DEP-05 | 低 | npmのバージョン範囲・レジストリ取得 | **直接依存13件を固定済み／インストール未検証** | `26f8cc8`・`8c20b60` で `package.json` の `^`・`~` を解消済みのlockfileバージョンに置き換え、lockfileルート定義を同期。`npm ci` で整合性確認する。推移依存はlockfileで固定される。 |
 | DEP-06 | 中 | Tauri・WebView2・Windows配布 | **未監査** | Tauri/RustSec/GHSAの更新通知、Windows WebView2の更新、署名と配布ZIPのSHA-256を定期確認する。 |
 
 ### 監査コマンド（開発者のWindows端末で実行）
@@ -78,7 +78,7 @@ cargo audit
 
 1. Windows実機15件を実施し、FAILを優先修正。
 2. npm・Rustの監査結果を収集し、GHSA/CVEごとに実際の解決済みバージョン、影響条件、修正版を確定する。
-3. APP-01のCSP導入を小さな変更として実装し、E2E・Windows実機で回帰検証。
+3. APP-01のCSP導入はユーザー判断により保留。外部コンテンツや権限が増えた場合に再検討。
 4. APP-02〜06の境界・大容量・競合テストを追加。
 5. 監査結果と残リスクをリリース判定に反映する。
 
@@ -88,3 +88,9 @@ cargo audit
 
 - `563f68a`：APP-03のリソース上限をRust側に実装し、階層と項目・ファイル数の単体テストを追加。
 - **Rustテスト・Windows実機・手動GitHub Actionsは未実行。** 対策が完全であることやCVE解消を意味しない。
+
+## 2026-11-23 運用方針の変更と依存固定
+
+- CSPはユーザーの明示的な方針により現状維持。外部バックエンドAPIがないことはCSPが無意味である根拠ではないが、今回の実装対象から除外する。
+- 「大量データ」は、①ディレクトリ配下のファイル・フォルダ数、②1つのYAML内のノード・通信・テキスト量、③サブシナリオ参照数・展開深度を指す。いずれも具体的な障害・攻撃の発生は未確認。②③への新規上限は実測・利用規模の確認まで見送る。
+- `package.json` の直接・開発依存13件を既存 `package-lock.json` の解決済みバージョンに固定。lockfileルート定義も同期。**バージョン固定は既知CVEの解消を意味しない**。監査は未実施。
