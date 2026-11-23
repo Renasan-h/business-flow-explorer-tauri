@@ -376,6 +376,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - Windowsで `npm run benchmark:scenario -- --output benchmark-result.json` を実行すると測定日時・OS・Node・各規模の中央値を記録できる。結果を比較し、通常規模で問題がある場合にのみ改善する。
 - GUI描画・移動・再生・保存は当該ベンチマークの対象外。Windows実機の受け入れケースと併せて検証する。
 
+## 9.28 シナリオ件数・YAML行数別メモリ測定（2026-11-23）
+
+- 開始時HEAD `a9b93709caaedf57fddafddfc526f3f787e046ee`。引き継ぎ・仕様・開発ルールと `src/scenario.ts` を照合。
+- `ef64c3c`：`scripts/benchmark-memory.mjs` にシナリオ数1/5/10/20件×YAML約50/200/500/1000行の16条件を追加。実際の `loadScenario` で読み込み、シナリオオブジェクトを保持した状態のChromiumレンダラーJSHeapUsedSizeを測定。ケースごとに新規ブラウザコンテキストを使い、GC後の測定値・差分・時間・実際の行数を記録する。
+- `b68a9bd`：`npm run benchmark:memory` を追加。実行時に `benchmark-memory/memory-results.json` と `benchmark-memory/memory-chart.svg` を生成する。
+- **実測未実行**。SVGは測定実行後に生成される。測定はブラウザのJSヒープのみで、Tauri/WebView2の総メモリ、GPUメモリ、画面描画は含まれない。
+- 次はWindowsで `npm ci`、`npm run benchmark:memory` を実行し、結果を確認。必要ならTauri実機のプロセス使用量測定を別途実装する。現実的な規模で問題が発生した場合のみ改善する。
+
 ## 10. 次の作業
 
 **第一候補：性能ベンチマークの実測・Windows実機未検証15ケース・npm依存固定後のテスト。極端な規模だけの性能問題は修正不要。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
