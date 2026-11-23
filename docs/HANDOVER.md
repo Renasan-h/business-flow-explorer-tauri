@@ -325,6 +325,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - **変更後のE2E・ビルド・Windows実機・GitHub Actionsは未実行。** 最後に確認されたPlaywright PASSはユーザー実行の旧HEAD `0303946`。
 - 次はWindowsで `git pull origin develop_tauri`、`npm run test:e2e`、`npm run build` を実行し、WIN-04・08・14〜17・25・26の実機結果を収集する。
 
+## 9.22 E2Eサーバー起動失敗時の後片付け修正（2026-11-23）
+
+- 作業開始時HEAD `f740da19fd3f7462b1dd42845bc0bece70c65ce5` を確認。引き継ぎ・仕様・開発ルールを照合。
+- `5324beb`：`scripts/test-editor-e2e.mjs` でViteのspawnに失敗しPIDが存在しない場合はWindowsのtaskkillを実行しない。taskkillのerrorイベントを捕捉し、後片付けが停止しないようにした。診断エラー文字列の改行を修正。
+- **修正後のE2E・ビルド・Windows実機・GitHub Actionsは未実行。** 最後に確認されたE2E PASSは旧HEAD `0303946`。
+- 次はWindows側で `npm run test:e2e` と `npm run build` を実行。実機WIN-04・08・14〜17・25・26を優先し、結果に応じて修正する。
+
 ## 10. 次の作業
 
 **第一候補：P0-1（Windows実機テストの実行）とP0-2（CI制限の状況確認・手動実行）。その後P1の実機確認とP2を進める。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
