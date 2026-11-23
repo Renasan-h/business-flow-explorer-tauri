@@ -350,8 +350,8 @@ mod tests {
         let canonical_root = root.canonicalize().unwrap();
         let target = root.join("scenario.yaml");
         let unrelated = root.join("unrelated.yaml");
-        let initial = "schemaVersion: '1.0'\\nmetadata:\\n  title: before\\n";
-        let updated = "schemaVersion: '1.0'\\nmetadata:\\n  title: after\\n";
+        let initial = "schemaVersion: '1.0'\nmetadata:\n  title: before\n";
+        let updated = "schemaVersion: '1.0'\nmetadata:\n  title: after\n";
         fs::write(&target, initial).unwrap();
         fs::write(&unrelated, "keep").unwrap();
 
