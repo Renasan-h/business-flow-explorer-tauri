@@ -452,6 +452,17 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - この環境ではNode.js 22とnpmは利用可能だが、GitHubリポジトリのローカル作業ツリーはなく、従来の直接取得はDNSエラー。Rustの`cargo`も未導入。したがって**Playwright・単体テスト・Rustテスト・Windows実機・GitHub Actionsは未実行**。テストのPASSは未確認。
 - 次はソース一式を取得できる実行環境で`npm ci`、`npx playwright install chromium`、`npm run test:e2e`、`npm run test:unit`を実行して失敗を修正する。WIN-16実機受け入れはNOT RUNのまま。
 
+## 9.38 ユーザー環境での自動テスト成功（2026-11-24）
+
+- 検証対象HEAD `4da325edd69a5b07dff6254d1c27dc7c9d169cb4`。ユーザーがWindows上で `git pull origin develop_tauri && npm run test && npm run check` を実行し、実行ログを共有。
+- `npm run test:unit`：`tsc --noEmit`、Viteビルド、バージョン一致、同梱YAML親6件・断片31件、WIN-16参照境界（32/33階層・循環・ルート逸脱）すべて成功。
+- `npm run test:e2e`：PlaywrightがPASSで終了。WIN-16実装経由テスト（参照順・Actor統合と矛盾拒否・循環・ルート逸脱・深さ制限）を含む。
+- `npm run test:rust`：Rustユニットテスト26件成功・失敗0件。main.rsの0件、doc-testの0件も正常終了。
+- `npm run check`：`cargo check` 正常終了。
+- ViteのZodコメント注釈警告および500KB超チャンク警告は残るが、ビルドは成功。
+- **GitHub Actionsは未実行**。Windows上の自動テスト成功は確認したが、`docs/WINDOWS_ACCEPTANCE_TESTS.md`の手動受け入れ15ケースは実施報告がないためNOT RUNのまま。
+- 次はWindows手動受け入れ（P0優先）を進める。性能ベンチマークはユーザー指示で区切り済み、CSPは保留。
+
 ## 10. 次の作業
 
 **第一候補：Windows実機未検証15ケース（P0: WIN-08・22・23・16）とRust回帰テストの実行、npm依存固定後のビルド確認。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
