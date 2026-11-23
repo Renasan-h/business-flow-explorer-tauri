@@ -20,7 +20,7 @@ const actor = z.object({
  // 表示色は#RRGGBBのみ許可し、資料はカンマ区切り入力を配列として保持する。
  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
  documents: z.array(z.string().max(300)).max(30).optional(),
- position: z.object({ x: z.number(), y: z.number() }).optional(),
+ position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
  // ノードごとの表示サイズ。未指定の場合は標準サイズを使用する。
  width: z.number().min(100).max(800).optional(),
  height: z.number().min(60).max(500).optional(),
@@ -30,7 +30,7 @@ const action = z.object({
  from: z.string(),
  to: z.string(),
  payload: z.string(),
- durationMs: z.number().positive(),
+ durationMs: z.number().finite().positive(),
 });
 const step = z.object({
  id: z.string().min(1),
@@ -68,7 +68,7 @@ const stepEntry = z.union([step, z.object({
  file: z.string().min(1),
  handoff: action.omit({ type: true }).optional(),
 }).strict()]);
-const group = z.object({ id: z.string().min(1), name: z.string().min(1), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), x: z.number().finite(), y: z.number().finite(), width: z.number().positive(), height: z.number().positive(), memberIds: z.array(z.string().min(1)).optional() });
+const group = z.object({ id: z.string().min(1), name: z.string().min(1), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), x: z.number().finite(), y: z.number().finite(), width: z.number().finite().positive(), height: z.number().finite().positive(), memberIds: z.array(z.string().min(1)).optional() });
 const interfaceDefinition = z.object({ id: z.string().min(1), name: z.string().min(1), description: z.string().optional(), fields: z.array(z.object({ name: z.string(), type: z.string(), required: z.boolean().optional(), description: z.string().optional() })).optional() });
 const fragmentSchema = z.object({
  groups: z.array(group).optional(),
