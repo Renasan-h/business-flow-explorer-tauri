@@ -471,6 +471,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - Playwrightはブラウザ取得がHTTP 403、代替のシステムChromiumも起動時のソケット作成拒否で、画面テストは開始できなかった。Cargo未導入のため今回のRustテストとcargo checkは未実行。§9.38はユーザー環境の別実行記録。
 - Windows受け入れ15件はNOT RUN。ケース別の検証範囲と残りは [WINDOWS_ACCEPTANCE_TESTS.md](WINDOWS_ACCEPTANCE_TESTS.md) を参照。GitHub Actionsは起動していない。
 
+## 9.40 WIN-21 複数選択の追加自動化（2026-11-25）
+
+- 開始時HEAD `a36ae1951e0d63e9a9cd1bdc78275c1d0b86916e`。仕様・開発ルール・開発ガイド・既存E2E・複数選択実装を確認。
+- `c39097e`：`scripts/test-editor-e2e.mjs` にShift選択解除、選択ノードのみの移動と非選択ノード不変、Undo、矩形範囲選択、Shift追加選択を追加。
+- GitHub直接取得はDNSエラー、cargo未導入。今回のE2E・Rust・ビルドは未実行。ユーザーの「解決」は最新HEADの全テスト成功を明示していないためPASS記録には使用しない。Windows受け入れ15件はNOT RUN、CI未起動。
+- 次は `npm run test:all` で追加ケースを確認し、WIN-23保存拒否など残る自動化を進める。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
