@@ -497,6 +497,42 @@ try {
   await page.getByText('2件選択中', { exact: true }).waitFor();
   const multiPositions = () => page.locator('[data-actor-id]').evaluateAll(elements =>
     elements.map(element => ({ id: element.getAttribute('data-actor-id'), x: element.querySelector('rect').getAttribute('x'), y: element.querySelector('rect').getAttribute('y') })));
+  // WIN-21: Shiftクリックで選択対象を反転し、非選択ノードを動かさない。
+  const firstMultiNode = page.locator('[data-actor-id]').first().locator('rect').first();
+  const secondMultiNode = page.locator('[data-actor-id]').last().locator('rect').first();
+  await secondMultiNode.click({ modifiers: ['Shift'] });
+  await page.getByText('1件選択中', { exact: true }).waitFor();
+  const partialBefore = await multiPositions();
+  const partialBox = await firstMultiNode.boundingBox();
+  if (!partialBox) throw new Error('WIN-21: selected node is not visible');
+  await page.mouse.move(partialBox.x + partialBox.width / 2, partialBox.y + partialBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(partialBox.x + partialBox.width / 2 + 24, partialBox.y + partialBox.height / 2 + 16, { steps: 8 });
+  await page.mouse.up();
+  const partialAfter = await multiPositions();
+  if (JSON.stringify(partialAfter[0]) === JSON.stringify(partialBefore[0]) ||
+      JSON.stringify(partialAfter[1]) !== JSON.stringify(partialBefore[1])) {
+    throw new Error('WIN-21: moving a selected node affected the wrong actors');
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(partialBefore)) {
+    throw new Error('WIN-21: partial selection movement was not restored');
+  }
+  // 空白から矩形をドラッグして一方だけを選択する。
+  const marqueeNode = await firstMultiNode.boundingBox();
+  const marqueeCanvas = await svg.boundingBox();
+  if (!marqueeNode || !marqueeCanvas) throw new Error('WIN-21: marquee target is missing');
+  const startX = marqueeNode.x - 8;
+  const startY = marqueeNode.y - 8;
+  if (startX <= marqueeCanvas.x || startY <= marqueeCanvas.y) throw new Error('WIN-21: no visible blank space for marquee');
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(marqueeNode.x + marqueeNode.width / 2, marqueeNode.y + marqueeNode.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.getByText('1件選択中', { exact: true }).waitFor();
+  await secondMultiNode.click({ modifiers: ['Shift'] });
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  console.log('PASS: WIN-21 Shift selection, partial movement and marquee selection');
   const multiBefore = await multiPositions();
   const multiBox = await page.locator('[data-actor-id]').first().locator('rect').first().boundingBox();
   if (!multiBox) throw new Error('First node is not visible for multi drag');
