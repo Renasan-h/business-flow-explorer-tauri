@@ -13,9 +13,14 @@ export function validateEditorScenario(actors: Actor[], steps: Step[], groups: G
  }
  if (new Set(steps.map(step => step.id)).size !== steps.length ||
   steps.some(step => !step.id.trim() ||
-   step.actions.some(action => !ids.has(action.from) || !ids.has(action.to) || action.durationMs <= 0) ||
+   step.actions.some(action => !ids.has(action.from) || !ids.has(action.to) || !Number.isFinite(action.durationMs) || action.durationMs <= 0) ||
    (step.bidirectional && (!step.reverseFrom || !step.reverseTo || !ids.has(step.reverseFrom) || !ids.has(step.reverseTo))))) {
   return '通信のID・参照先・所要時間を確認してください。';
+ }
+ // 読込時の制約と一致させ、保存後に開けない経由点を拒否する。
+ if (steps.some(step => [step.waypoints, step.reverseWaypoints].some(points =>
+  points && (points.length > 100 || points.some(point => !Number.isFinite(point.x) || !Number.isFinite(point.y)))))) {
+  return '通信の経由点は100件以内の有限座標で指定してください。';
  }
  // グループに削除済みノードが残ると、再読込時に不正な参照が残る。
  if (groups.some(group => (group.memberIds ?? []).some(id => !ids.has(id)))) {
