@@ -292,9 +292,25 @@ try {
     await emptyPage.getByRole('button', { name: '✎ フローを編集' }).waitFor();
     await emptyPage.getByRole('button', { name: '✎ フローを編集' }).click();
     await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor();
+    // WIN-23: 空シナリオの保存拒否と元ファイル保持。
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('保存にはノード2件以上と通信1件以上が必要です。', { exact: true }).waitFor();
+    const assertNoWrite = async () => {
+      const result = await emptyPage.evaluate(() => ({
+        content: window.__emptyExistingTest.files.get('empty-existing.yaml'),
+        calls: window.__emptyExistingTest.calls.length,
+      }));
+      if (result.content !== originalEmpty || result.calls !== 0) throw new Error('WIN-23: invalid save changed original YAML');
+    };
+    await assertNoWrite();
     await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
     await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
     await emptyPage.getByLabel('X', { exact: true }).fill('300');
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('保存にはノード2件以上と通信1件以上が必要です。', { exact: true }).waitFor();
+    await assertNoWrite();
+    if (await emptyPage.locator('[data-actor-id]').count() !== 2) throw new Error('WIN-23: rejected save discarded nodes');
+    console.log('PASS: WIN-23 empty/no-step save rejected');
     const emptyActors = emptyPage.locator('[data-actor-id]');
     const emptyHandle = await emptyPage.locator('[data-connection-handle]').first().boundingBox();
     const emptyDestination = await emptyActors.last().locator('rect').first().boundingBox();
