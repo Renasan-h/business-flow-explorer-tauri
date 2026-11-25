@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { branchGroups, playbackActors, playbackSteps } from '../branchPlayback';
 import { iconCommands, illustrationIconCommands } from '../nodeIconShapes';
+import { nodeSize, containsNodePoint } from '../editor/nodeGeometry';
 import { routeConnection, routeViaWaypoints, offsetRoute } from '../connectionRouting';
 import { pointAlongRoute, type RoutePoint } from './playbackRoute';
 import type { Scenario } from '../scenario';
@@ -10,8 +11,6 @@ import type { Mode, Theme, PlaybackSpeed } from './types';
 const clampZoom = (value: number) => Math.max(0.35, Math.min(2.5, Math.round(value * 100) / 100));
 const VIEW_WIDTH = 1100;
 const VIEW_HEIGHT = 620;
-const NODE_WIDTH = 150;
-const NODE_HEIGHT = 90;
 // CSSでキャンバスを縮小しても文字テクスチャの輪郭を保つため、高密度でラスタライズする。
 const textResolution = () => Math.min(4, Math.max(2, (window.devicePixelRatio || 1) * 2));
 const palette = { technical: { bg: 0x0a1427, node: 0x17375a, border: 0x38bdf8, line: 0x2b648a, text: 0xe2f2ff }, illustration: { bg: 0xf0f5fc, node: 0xffffff, border: 0x5b83d7, line: 0x9ab6d7, text: 0x263d62 } };
@@ -149,9 +148,9 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   const end = byId.get(action.to);
   if (!start || !end) return;
 
-  const label = (value: string, x: number, y: number, size = 14) => {
+  const label = (value: string, x: number, y: number, size = 14, wrapWidth = 220) => {
    const text = new Text({ text: value, resolution: textResolution(), style: new TextStyle({
-    fontFamily: 'Arial, sans-serif', fontSize: size, fontWeight: '600', fill: colors.text, align: 'center', wordWrap: true, wordWrapWidth: size === 12 ? NODE_WIDTH - 12 : 220, breakWords: true,
+    fontFamily: 'Arial, sans-serif', fontSize: size, fontWeight: '600', fill: colors.text, align: 'center', wordWrap: true, wordWrapWidth: wrapWidth, breakWords: true,
    }) });
    // サブピクセル配置によるテクスチャ補間を避ける。
    text.roundPixels = true;
@@ -161,7 +160,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   };
 
   // 送信と受信の経路を平行に配置し、矢印で通信方向を明示する。
-  const routingNodes = actors.map(actor => ({ ...actor, width: NODE_WIDTH, height: NODE_HEIGHT }));
+  const routingNodes = actors;
   const drawLane = (fromId: string, toId: string, offset: number, color: number, alpha: number, waypoints: RoutePoint[] = [], routing: 'straight' | 'orthogonal' = 'straight') => {
    const base = routing === 'orthogonal' && waypoints.length
     ? routeViaWaypoints(routingNodes, fromId, toId, waypoints)
@@ -231,9 +230,10 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   }
 
   for (const actor of actors) {
+   const { width, height } = nodeSize(actor);
    const active = actor.id === action.from || actor.id === action.to;
    const g = new Graphics()
-    .roundRect(actor.position.x - NODE_WIDTH / 2, actor.position.y - NODE_HEIGHT / 2, NODE_WIDTH, NODE_HEIGHT, mode === 'illustration' ? 20 : 12)
+    .roundRect(actor.position.x - width / 2, actor.position.y - height / 2, width, height, mode === 'illustration' ? 20 : 12)
     .fill(actor.color ? Number.parseInt(actor.color.slice(1), 16) : (active ? (theme === 'dark' ? 0x205a83 : 0xdbeafe) : colors.node))
     .stroke({ color: colors.border, width: active ? 3 : 1.5 });
    if (focus && !active) g.alpha = 0.38;
@@ -244,7 +244,8 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    // SVG画面と同じベクター定義をPixiJS Graphicsで描画する。
    const glyph = new Graphics();
    const illustrated = mode === 'illustration';
-   const scale = illustrated ? 1.42 : 1.3;
+   const contentScale = Math.min(1, width / 150, height / 90);
+   const scale = (illustrated ? 1.42 : 1.3) * contentScale;
    // イラストモードは専用ピクトグラムとカテゴリ別のアクセント色を使う。
    const illustrationColors: Record<string, number> = {
     person: 0xf59e0b, server: 0x2563eb, database: 0x0d9488, service: 0x7c3aed,
@@ -254,7 +255,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    };
    const iconColor = illustrated ? (illustrationColors[actor.type] ?? 0x475569) : colors.text;
    if (illustrated) {
-    const backing = new Graphics().roundRect(actor.position.x - 22, actor.position.y - 31, 44, 44, 13)
+    const backing = new Graphics().roundRect(actor.position.x - 22 * contentScale, actor.position.y - 31 * contentScale, 44 * contentScale, 44 * contentScale, 13 * contentScale)
      .fill({ color: iconColor, alpha: 0.12 })
      .stroke({ color: iconColor, alpha: 0.35, width: 1.5 });
     if (focus && !active) backing.alpha = 0.38;
@@ -272,14 +273,14 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
     glyph.stroke({ color: iconColor, width: illustrated ? 2.1 : 1.8, cap: 'round', join: 'round' });
    }
    glyph.scale.set(scale);
-   glyph.position.set(actor.position.x - 12 * scale, actor.position.y - 9 - 12 * scale);
+   glyph.position.set(actor.position.x - 12 * scale, actor.position.y - 9 * contentScale - 12 * scale);
    if (focus && !active) glyph.alpha = 0.38;
    layer.addChild(glyph);
-   label(actor.name, actor.position.x, actor.position.y + 21, 12);
+   label(actor.name, actor.position.x, actor.position.y + 21 * contentScale, 12 * contentScale, Math.max(1, width - 12));
    // 指定されたインスタンス名とIPアドレスをノード上部に表示する。
    const details = [actor.instanceName, actor.ip].filter(Boolean);
    if (details.length > 0) {
-    label(details.join('  /  '), actor.position.x, actor.position.y - 58, 11);
+    label(details.join('  /  '), actor.position.x, actor.position.y - height / 2 - 13, 11);
    }
   }
   const packet = new Graphics().circle(0, 0, 10).fill(sendColor).stroke({ color: 0xffffff, width: 2 });
@@ -331,7 +332,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    const x = (event.clientX - bounds.left - pan.x) / zoom;
    const y = (event.clientY - bounds.top - pan.y) / zoom;
    // ノード上のクリックだけを詳細パネルの表示へ渡す。
-   const actor = scenario.actors.find(item => Math.abs(item.position.x - x) <= NODE_WIDTH / 2 && Math.abs(item.position.y - y) <= NODE_HEIGHT / 2);
+   const actor = scenario.actors.find(item => containsNodePoint(item, { x, y }));
    if (actor) selectActorRef.current(actor.id);
   }}
   onPointerCancel={() => { pointerRef.current = null; }}
