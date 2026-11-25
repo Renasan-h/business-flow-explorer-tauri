@@ -134,6 +134,55 @@ try {
     }
   });
 
+  // WIN-15: 実画面の分岐選択、ステップ一覧、再生位置のリセットを検証する。
+  const branchPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const branchYaml = stringify({
+    schemaVersion: '1.0',
+    metadata: { id: 'branch-test', title: 'WIN-15 branch test', description: '', category: 'test' },
+    actors: ['decision', 'a', 'b', 'shared'].map(id => ({
+      id, name: id, type: id === 'decision' ? 'decision' : 'server',
+    })),
+    steps: [
+      ['a-start', 'decision', 'a'], ['b-start', 'decision', 'b'],
+      ['a-end', 'a', 'shared'], ['b-end', 'b', 'shared'],
+    ].map(([id, from, to]) => ({
+      id, title: id, description: '', actions: [{ type: 'transfer', from, to, payload: id, durationMs: 100 }],
+    })),
+  });
+  await branchPage.addInitScript(content => {
+    window.isTauri = true;
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'Branch test folder';
+        if (command === 'list_scenario_files') return ['branch-test.yaml'];
+        if (command === 'read_scenario_file' && args.relativePath === 'branch-test.yaml') return content;
+        throw new Error('Unexpected command: ' + command);
+      },
+    };
+  }, branchYaml);
+  try {
+    await branchPage.goto('http://127.0.0.1:4179/');
+    await branchPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await branchPage.getByRole('heading', { name: 'WIN-15 branch test' }).waitFor();
+    const selector = branchPage.locator('.branch-selector select');
+    const rows = branchPage.locator('.steps button');
+    for (const branch of ['a', 'b', 'a']) {
+      await selector.selectOption(branch + '-start');
+      await branchPage.getByText('STEP 1 / 2', { exact: true }).waitFor();
+      await rows.nth(1).waitFor();
+      const labels = await rows.allTextContents();
+      if (labels.join('|') !== '1. ' + branch + '-start|2. ' + branch + '-end') {
+        throw new Error('WIN-15: unexpected visible steps: ' + labels.join('|'));
+      }
+      await branchPage.getByRole('button', { name: '次へ ▶' }).click();
+      await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
+      await branchPage.locator('.explanation h2').filter({ hasText: branch + '-end' }).waitFor();
+    }
+    console.log('PASS: WIN-15 branch selector A/B/A and step reset');
+  } finally {
+    await branchPage.close();
+  }
+
   // Tauri保存APIをブラウザ上で模擬し、新規作成→再保存→外部競合を検証する。
   // 画面操作のテストとは別に、エディターが利用する保存経路の契約を確認する。
   await page.evaluate(async () => {
