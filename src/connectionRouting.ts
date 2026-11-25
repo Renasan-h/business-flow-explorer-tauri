@@ -109,6 +109,8 @@ export function pointOnRoute(points: Point[], progress: number): Point {
 
 /** 通信方向ごとに線を平行移動し、送信・受信の2レーンを表現する。 */
 export function offsetRoute(points: Point[], distance: number): Point[] {
+ if (distance === 0) return points;
+ points = points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y);
  if (points.length < 2) return points;
  const segments = points.slice(1).map((point, index) => {
   const dx = point.x - points[index].x;
@@ -124,6 +126,9 @@ export function offsetRoute(points: Point[], distance: number): Point[] {
   }
   const prev = segments[index - 1];
   const next = segments[index];
+  // 直角では移動後の2直線の交点を使用する。反転時は別途接続する。
+  const dot = (prev.x * next.x + prev.y * next.y) / (distance * distance);
+  if (Math.abs(dot) < 1e-8) return { x: point.x + prev.x + next.x, y: point.y + prev.y + next.y };
   return { x: point.x + (prev.x + next.x) / 2, y: point.y + (prev.y + next.y) / 2 };
  });
 }
