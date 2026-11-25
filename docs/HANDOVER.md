@@ -557,6 +557,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。既存ローカル再現版の経路補間テストを node --experimental-strip-types --test test.mjs で実行し10 PASS、0 FAIL。新しい配線統合のビルド・E2E・Rust・CI・Windows実機は未実行。
 - 次は個別ノードサイズと端点・レーンの整合、直角配線の回帰テスト。Windows未検証15件はNOT RUN。
 
+## 9.52 WIN-14 再生ノード個別サイズ（2026-11-25）
+
+- 開始時HEAD `4ef1968`。仕様・開発ルール・開発ガイド・PlaybackScene・Appを確認。
+- `bcee21a`：nodeSizeとcontainsNodePointを再利用し、描画・クリック・配線を個別サイズに対応。小さいノードのアイコンと文字を縮小。
+- `0512f15`：初期表示範囲の標準高さを編集側と同じ76に統一（従来90）。
+- git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。既存ローカル再現版の経路補間テストを実行し10 PASS、0 FAIL。今回のサイズ変更自体のビルド・E2E・Rust・CI・Windows実機は未実行。既存WIN-15の固定座標画像テストも再確認が必要。
+- 次はマーカー端点余白と直角配線・個別サイズの回帰テスト。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
