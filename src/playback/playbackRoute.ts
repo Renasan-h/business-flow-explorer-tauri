@@ -15,3 +15,11 @@ export function pointAlongRoute(points: RoutePoint[], progress: number): RoutePo
  }
  return points[points.length - 1] ?? { x: 0, y: 0 };
 }
+
+/** 線はそのまま描画し、マーカーだけ両端から半径分離す。短い経路は中央に留める。 */
+export function markerAlongRoute(points: RoutePoint[], progress: number, radius = 12): RoutePoint {
+ const total = points.slice(1).reduce((sum, point, i) => sum + Math.hypot(point.x - points[i].x, point.y - points[i].y), 0);
+ if (total === 0) return pointAlongRoute(points, progress);
+ const inset = Math.min(Math.max(0, radius), total / 2);
+ return pointAlongRoute(points, (inset + (total - 2 * inset) * Math.max(0, Math.min(1, progress))) / total);
+}
