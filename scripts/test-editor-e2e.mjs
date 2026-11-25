@@ -289,45 +289,53 @@ try {
         await pause.waitFor();
         if (kind === 'roundtrip') {
           await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
-          // マーカーの塗り色がまとまった面積で存在することをPNGから検証する。
-          // 線幅3pxの通信線だけでは11×11の領域を満たせない。
-          const seen = new Set();
-          const deadline = Date.now() + 12000;
-          while (Date.now() < deadline && seen.size < 2 && await pause.count()) {
-            const png = await canvas.screenshot({ scale: 'css' });
-            const legs = await playbackPage.evaluate(async base64 => {
-              const image = new Image();
-              image.src = 'data:image/png;base64,' + base64;
-              await image.decode();
-              const surface = document.createElement('canvas');
-              surface.width = image.width;
-              surface.height = image.height;
-              const ctx = surface.getContext('2d');
-              ctx.drawImage(image, 0, 0);
-              const { data } = ctx.getImageData(0, 0, image.width, image.height);
-              const matches = (x,y) => {
-                const i = (y * image.width + x) * 4;
-                return [[34,211,238],[37,99,235]].some(rgb =>
-                  rgb.every((v,j) => Math.abs(data[i+j]-v) <= 8));
-              };
-              const found = [];
-              for (const [leg,top,bottom] of [['forward',165,230],['reverse',390,455]]) {
-                for (let y=top; y<Math.min(bottom,image.height-6); y+=2) {
-                  for (let x=490; x<Math.min(630,image.width-6); x+=2) {
-                    if (matches(x,y) && matches(x-5,y-5) && matches(x+5,y-5) &&
-                        matches(x-5,y+5) && matches(x+5,y+5)) {
-                      found.push(leg);
-                      break;
-                    }
+          // スクリーンショット取得中はフレームの進行が偏る場合がある。
+          // 往路・復路それぞれの中間で一時停止し、静止状態のマーカーを検証する。
+          const checkMarkerLeg = async (leg) => {
+            let detected = false;
+            for (let attempt = 0; attempt < 4 && !detected; attempt++) {
+              const png = await canvas.screenshot({ scale: 'css' });
+              detected = await playbackPage.evaluate(async ({ base64, leg }) => {
+                const image = new Image();
+                image.src = 'data:image/png;base64,' + base64;
+                await image.decode();
+                const surface = document.createElement('canvas');
+                surface.width = image.width;
+                surface.height = image.height;
+                const ctx = surface.getContext('2d');
+                ctx.drawImage(image, 0, 0);
+                const { data } = ctx.getImageData(0, 0, image.width, image.height);
+                const matches = (x, y) => {
+                  const i = (y * image.width + x) * 4;
+                  return [[34, 211, 238], [37, 99, 235]].some(rgb =>
+                    rgb.every((value, channel) => Math.abs(data[i + channel] - value) <= 12));
+                };
+                // ノード中心や線の外側で、半径10pxの色付き円を検出する。
+                // 往復の経由点はそれぞれ y=180 / y=440 付近に配置してある。
+                const [top, bottom] = leg === 'forward' ? [160, 260] : [370, 490];
+                for (let y = top + 6; y < Math.min(bottom, image.height - 6); y += 2) {
+                  for (let x = 485; x < Math.min(645, image.width - 6); x += 2) {
+                    if (matches(x, y) && matches(x - 4, y - 4) &&
+                        matches(x + 4, y - 4) && matches(x - 4, y + 4) &&
+                        matches(x + 4, y + 4)) return true;
                   }
-                  if (found.includes(leg)) break;
                 }
-              }
-              return found;
-            }, png.toString('base64'));
-            for (const leg of legs) seen.add(leg);
-          }
-          if (seen.size !== 2) throw new Error('WIN-14: missing rendered marker leg: ' + [...seen].join(','));
+                return false;
+              }, { base64: png.toString('base64'), leg });
+              if (!detected) await delay(100);
+            }
+            if (!detected) throw new Error('WIN-14: missing rendered marker leg: ' + leg);
+          };
+          // 片道3000ms、速度1x。最初の1400msは往路中段、
+          // 再開後3000msは復路中段に当たる。
+          await delay(1400);
+          await pause.click();
+          await checkMarkerLeg('forward');
+          await play.click();
+          await delay(3000);
+          await pause.click();
+          await checkMarkerLeg('reverse');
+          await play.click();
 
           await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
         } else if (await playbackPage.getByText(/復路通信内容:/).count()) {
