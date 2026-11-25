@@ -14,7 +14,7 @@
     "prebuild": "node scripts/generate-icon.mjs",
     "check": "cargo check --manifest-path src-tauri/Cargo.toml",
     "test": "npm run test:unit && npm run test:e2e && npm run test:rust",
-    "test:unit": "npm run build:web && node scripts/check-version.mjs && node scripts/test-scenario-fragments.mjs && node --experimental-strip-types --test scripts/test-editor-validation.mjs",
+    "test:unit": "npm run build:web && node scripts/check-version.mjs && node scripts/test-scenario-fragments.mjs && node --experimental-strip-types --test scripts/test-editor-validation.mjs && node --experimental-strip-types --test scripts/test-playback-route.mjs",
     "test:e2e": "node scripts/test-editor-e2e.mjs",
     "benchmark:scenario": "node scripts/benchmark-scenario-load.mjs",
     "benchmark:memory": "node scripts/benchmark-memory.mjs",
