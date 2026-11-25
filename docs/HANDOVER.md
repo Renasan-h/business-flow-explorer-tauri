@@ -515,6 +515,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - 実際のgit ls-remoteは Could not resolve host: github.com、Node 22.16.0、cargo未導入。ビルド・E2E・Rust・Windows実機・CIは未実行。非選択ノードの実描画確認も残る。Windows未検証15件はNOT RUN。
 - 次は最新HEADでnpm run test:allを実行し、描画確認を進める。
 
+## 9.46 WIN-15 分岐ノード操作検証（2026-11-25）
+
+- 開始時HEAD `25d78f7`。仕様・開発ルール・開発ガイド・レイアウト・詳細パネル・既存E2Eを確認。
+- `613e3d4`：固定座標の分岐シナリオで選択側と合流先の詳細表示、非選択側座標のクリックで詳細が開かないことを検証するE2Eを追加。画像ピクセルによる描画確認とは区別する。
+- git ls-remoteを実行したが Could not resolve host: github.com。Node 22.16.0、cargo: command not found。今回のE2E・ビルド・Rust・CI・Windows実機は未実行。未検証15件はNOT RUN。
+- 次は最新HEADで全テスト実行、WIN-15描画確認とWIN-14双方向通信検証。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
