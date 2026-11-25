@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { branchGroups, playbackActors, playbackSteps } from '../branchPlayback';
 import { iconCommands, illustrationIconCommands } from '../nodeIconShapes';
+import { pointAlongRoute, type RoutePoint } from './playbackRoute';
 import type { Scenario } from '../scenario';
 import type { Mode, Theme, PlaybackSpeed } from './types';
 
@@ -20,7 +21,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
  const resizeObserverRef = useRef<ResizeObserver | null>(null);
  const layerRef = useRef<Container | null>(null);
  const packetRef = useRef<Graphics | null>(null);
- const routeRef = useRef<{ start: { x: number; y: number }; end: { x: number; y: number }; duration: number; reverse?: { start: { x: number; y: number }; end: { x: number; y: number } } } | null>(null);
+ const routeRef = useRef<{ points: RoutePoint[]; duration: number; reverse?: { points: RoutePoint[] } } | null>(null);
  const elapsedRef = useRef(0);
  const lastStepRef = useRef(step);
  const lastRevisionRef = useRef(playbackRevision);
@@ -99,10 +100,8 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
     const elapsed = returning ? elapsedRef.current - legDuration : elapsedRef.current;
     const progress = Math.min(1, elapsed / legDuration);
     const eased = progress * progress * (3 - 2 * progress);
-    packet.position.set(
-     leg.start.x + (leg.end.x - leg.start.x) * eased,
-     leg.start.y + (leg.end.y - leg.start.y) * eased,
-    );
+    const point = pointAlongRoute(leg.points, eased);
+    packet.position.set(point.x, point.y);
     if (elapsedRef.current >= route.duration) {
      // 完了通知が連続して発火しないよう、次の描画更新まで停止する。
      routeRef.current = null;
@@ -161,7 +160,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   };
 
   // 送信と受信の経路を平行に配置し、矢印で通信方向を明示する。
-  const drawLane = (from: { x: number; y: number }, to: { x: number; y: number }, offset: number, color: number, alpha: number) => {
+  const drawLane = (from: { x: number; y: number }, to: { x: number; y: number }, offset: number, color: number, alpha: number, waypoints: RoutePoint[] = []) => {
    const dx = to.x - from.x;
    const dy = to.y - from.y;
    const length = Math.hypot(dx, dy) || 1;
@@ -182,19 +181,21 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    const sy = from.y + ny * offset + (dy / length) * trim;
    const ex = to.x + nx * offset - (dx / length) * trim;
    const ey = to.y + ny * offset - (dy / length) * trim;
-   const line = new Graphics()
-    .moveTo(sx, sy).lineTo(ex, ey)
-    .stroke({ color, width: 3, alpha });
-   const ux = dx / length;
-   const uy = dy / length;
-   const arrowX = sx + (ex - sx) * 0.65;
-   const arrowY = sy + (ey - sy) * 0.65;
-   line.moveTo(arrowX - ux * 9 - uy * 6, arrowY - uy * 9 + ux * 6)
-    .lineTo(arrowX, arrowY)
-    .lineTo(arrowX - ux * 9 + uy * 6, arrowY - uy * 9 - ux * 6)
+   const points = [{ x: sx, y: sy }, ...waypoints, { x: ex, y: ey }];
+   const line = new Graphics().moveTo(sx, sy);
+   for (const point of points.slice(1)) line.lineTo(point.x, point.y);
+   line.stroke({ color, width: 3, alpha });
+   const arrow = pointAlongRoute(points, 0.65);
+   const before = pointAlongRoute(points, 0.649);
+   const tangent = Math.hypot(arrow.x - before.x, arrow.y - before.y) || 1;
+   const ux = (arrow.x - before.x) / tangent;
+   const uy = (arrow.y - before.y) / tangent;
+   line.moveTo(arrow.x - ux * 9 - uy * 6, arrow.y - uy * 9 + ux * 6)
+    .lineTo(arrow.x, arrow.y)
+    .lineTo(arrow.x - ux * 9 + uy * 6, arrow.y - uy * 9 - ux * 6)
     .stroke({ color, width: 3, alpha });
    layer.addChild(line);
-   return { start: { x: sx, y: sy }, end: { x: ex, y: ey } };
+   return { points };
   };
   // 汎用領域グループを通信線とノードの背面に描画する。
   for (const group of scenario.groups ?? []) {
@@ -222,7 +223,8 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
      connections.add(JSON.stringify([scenarioStep.reverseFrom, scenarioStep.reverseTo]));
    }
   }
-  let sendRoute = { start: start.position, end: end.position };
+  const currentStep = scenario.steps[step];
+  let sendRoute = { points: [start.position, end.position] };
   for (const connection of connections) {
    const [fromId, toId] = JSON.parse(connection) as [string, string];
    const fromActor = byId.get(fromId);
@@ -232,10 +234,10 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    const active = fromId === action.from && toId === action.to;
    const laneOffset = bidirectional ? -13 : 0;
    if (active) {
-    sendRoute = drawLane(fromActor.position, toActor.position, laneOffset, sendColor, 0.95);
+    sendRoute = drawLane(fromActor.position, toActor.position, laneOffset, sendColor, 0.95, currentStep.waypoints);
     // 注目表示中も双方向接続の復路を残す。復路は再生ステップを増やさない。
     // 復路は後段で明示的な送受信先から描画する。
-   } else if (!focus) {
+   } else if (!focus && !(currentStep.bidirectional && fromId === currentStep.reverseFrom && toId === currentStep.reverseTo)) {
     drawLane(fromActor.position, toActor.position, laneOffset, inactiveColor, 0.24);
    }
   }
@@ -295,21 +297,19 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   const packet = new Graphics().circle(0, 0, 10).fill(sendColor).stroke({ color: 0xffffff, width: 2 });
   layer.addChild(packet);
   packetRef.current = packet;
-  const from = sendRoute.start;
-  const to = sendRoute.end;
-  const currentStep = scenario.steps[step];
   const reverseFrom = currentStep.reverseFrom ? byId.get(currentStep.reverseFrom) : undefined;
   const reverseTo = currentStep.reverseTo ? byId.get(currentStep.reverseTo) : undefined;
   const reverse = currentStep.bidirectional && reverseFrom && reverseTo
-   ? drawLane(reverseFrom.position, reverseTo.position, -13, inactiveColor, focus ? 0.65 : 0.24) : undefined;
+   ? drawLane(reverseFrom.position, reverseTo.position, -13, inactiveColor, focus ? 0.65 : 0.24, currentStep.reverseWaypoints) : undefined;
   const duration = action.durationMs * (reverse ? 2 : 1);
-  routeRef.current = { start: from, end: to, duration, reverse };
+  routeRef.current = { points: sendRoute.points, duration, reverse };
   const returning = Boolean(reverse && elapsedRef.current >= action.durationMs);
-  const leg = returning ? reverse! : { start: from, end: to };
+  const leg = returning ? reverse! : sendRoute;
   const elapsed = returning ? elapsedRef.current - action.durationMs : elapsedRef.current;
   const progress = Math.min(1, elapsed / action.durationMs);
   const eased = progress * progress * (3 - 2 * progress);
-  packet.position.set(leg.start.x + (leg.end.x - leg.start.x) * eased, leg.start.y + (leg.end.y - leg.start.y) * eased);
+  const point = pointAlongRoute(leg.points, eased);
+  packet.position.set(point.x, point.y);
   label(action.payload, (start.position.x + end.position.x) / 2, (start.position.y + end.position.y) / 2 - 32, 13);
  }, [scenario, step, mode, theme, focus, ready, playbackRevision]);
 
