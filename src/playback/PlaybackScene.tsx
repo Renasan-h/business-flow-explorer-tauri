@@ -4,7 +4,7 @@ import { branchGroups, playbackActors, playbackSteps } from '../branchPlayback';
 import { iconCommands, illustrationIconCommands } from '../nodeIconShapes';
 import { nodeSize, containsNodePoint } from '../editor/nodeGeometry';
 import { routeConnection, routeViaWaypoints, offsetRoute } from '../connectionRouting';
-import { pointAlongRoute, type RoutePoint } from './playbackRoute';
+import { markerAlongRoute, pointAlongRoute, type RoutePoint } from './playbackRoute';
 import type { Scenario } from '../scenario';
 import type { Mode, Theme, PlaybackSpeed } from './types';
 
@@ -100,7 +100,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
     const elapsed = returning ? elapsedRef.current - legDuration : elapsedRef.current;
     const progress = Math.min(1, elapsed / legDuration);
     const eased = progress * progress * (3 - 2 * progress);
-    const point = pointAlongRoute(leg.points, eased);
+    const point = markerAlongRoute(leg.points, eased);
     packet.position.set(point.x, point.y);
     if (elapsedRef.current >= route.duration) {
      // 完了通知が連続して発火しないよう、次の描画更新まで停止する。
@@ -297,7 +297,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   const elapsed = returning ? elapsedRef.current - action.durationMs : elapsedRef.current;
   const progress = Math.min(1, elapsed / action.durationMs);
   const eased = progress * progress * (3 - 2 * progress);
-  const point = pointAlongRoute(leg.points, eased);
+  const point = markerAlongRoute(leg.points, eased);
   packet.position.set(point.x, point.y);
   label(action.payload, (start.position.x + end.position.x) / 2, (start.position.y + end.position.y) / 2 - 32, 13);
  }, [scenario, step, mode, theme, focus, ready, playbackRevision]);
