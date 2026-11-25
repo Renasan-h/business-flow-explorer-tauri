@@ -249,7 +249,7 @@ try {
         id: 'transfer', title: 'transfer', description: '',
         ...(kind === 'roundtrip' ? { bidirectional: true, reverseFrom: 'b', reverseTo: 'a', reversePayload: 'response', routing: 'orthogonal', waypoints: [{ x: 550, y: 180 }], reverseWaypoints: [{ x: 550, y: 440 }] } :
           kind === 'missing' ? { bidirectional: true, reverseFrom: 'b' } : {}),
-        actions: [{ type: 'transfer', from: 'a', to: 'b', payload: 'request', durationMs: 1200 }],
+        actions: [{ type: 'transfer', from: 'a', to: 'b', payload: 'request', durationMs: kind === 'roundtrip' ? 3000 : 1200 }],
       }],
     });
     await playbackPage.addInitScript(yaml => {
@@ -289,15 +289,53 @@ try {
         await pause.waitFor();
         if (kind === 'roundtrip') {
           await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
-          await delay(1450);
-          await pause.waitFor({ timeout: 500 });
+          // マーカーの塗り色がまとまった面積で存在することをPNGから検証する。
+          // 線幅3pxの通信線だけでは11×11の領域を満たせない。
+          const seen = new Set();
+          const deadline = Date.now() + 12000;
+          while (Date.now() < deadline && seen.size < 2 && await pause.count()) {
+            const png = await canvas.screenshot({ scale: 'css' });
+            const legs = await playbackPage.evaluate(async base64 => {
+              const image = new Image();
+              image.src = 'data:image/png;base64,' + base64;
+              await image.decode();
+              const surface = document.createElement('canvas');
+              surface.width = image.width;
+              surface.height = image.height;
+              const ctx = surface.getContext('2d');
+              ctx.drawImage(image, 0, 0);
+              const { data } = ctx.getImageData(0, 0, image.width, image.height);
+              const matches = (x,y) => {
+                const i = (y * image.width + x) * 4;
+                return [[34,211,238],[37,99,235]].some(rgb =>
+                  rgb.every((v,j) => Math.abs(data[i+j]-v) <= 8));
+              };
+              const found = [];
+              for (const [leg,top,bottom] of [['forward',165,230],['reverse',390,455]]) {
+                for (let y=top; y<Math.min(bottom,image.height-6); y+=2) {
+                  for (let x=490; x<Math.min(630,image.width-6); x+=2) {
+                    if (matches(x,y) && matches(x-5,y-5) && matches(x+5,y-5) &&
+                        matches(x-5,y+5) && matches(x+5,y+5)) {
+                      found.push(leg);
+                      break;
+                    }
+                  }
+                  if (found.includes(leg)) break;
+                }
+              }
+              return found;
+            }, png.toString('base64'));
+            for (const leg of legs) seen.add(leg);
+          }
+          if (seen.size !== 2) throw new Error('WIN-14: missing rendered marker leg: ' + [...seen].join(','));
+
           await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
         } else if (await playbackPage.getByText(/復路通信内容:/).count()) {
           throw new Error('WIN-14: one-way transfer displayed reverse payload');
         }
         await finished.waitFor({ timeout: 15000 });
         const elapsed = Date.now() - start;
-        if (elapsed < (kind === 'roundtrip' ? 2200 : 1000)) throw new Error('WIN-14: playback ended too early: ' + elapsed);
+        if (elapsed < (kind === 'roundtrip' ? 5500 : 1000)) throw new Error('WIN-14: playback ended too early: ' + elapsed);
         await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
       }
       if (playbackErrors.length) throw new Error(playbackErrors.join('\n'));
