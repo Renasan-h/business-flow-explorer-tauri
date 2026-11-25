@@ -16,7 +16,7 @@ import type { Mode, Theme, PlaybackSpeed } from './playback/types';
 const VIEW_WIDTH = 1100;
 const VIEW_HEIGHT = 620;
 const NODE_WIDTH = 150;
-const NODE_HEIGHT = 90;
+const NODE_HEIGHT = 76;
 const clampZoom = (value: number) => Math.max(0.35, Math.min(2.5, Math.round(value * 100) / 100));
 
 export default function App() {
