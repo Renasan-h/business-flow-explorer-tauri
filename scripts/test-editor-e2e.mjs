@@ -233,6 +233,71 @@ try {
     await branchPage.close();
   }
 
+  // WIN-14: 往復を1ステップとして再生し、復路欠落時は再生を拒否する。
+  for (const kind of ['roundtrip', 'oneway', 'missing']) {
+    const playbackPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const playbackErrors = [];
+    playbackPage.on('pageerror', error => playbackErrors.push(error.message));
+    const content = stringify({
+      schemaVersion: '1.0',
+      metadata: { id: kind, title: 'WIN-14 ' + kind, description: '', category: 'test' },
+      actors: [
+        { id: 'a', name: 'A', type: 'server', position: { x: 200, y: 200 } },
+        { id: 'b', name: 'B', type: 'server', position: { x: 600, y: 200 } },
+      ],
+      steps: [{
+        id: 'transfer', title: 'transfer', description: '',
+        ...(kind === 'roundtrip' ? { bidirectional: true, reverseFrom: 'b', reverseTo: 'a', reversePayload: 'response' } :
+          kind === 'missing' ? { bidirectional: true, reverseFrom: 'b' } : {}),
+        actions: [{ type: 'transfer', from: 'a', to: 'b', payload: 'request', durationMs: 1200 }],
+      }],
+    });
+    await playbackPage.addInitScript(yaml => {
+      window.isTauri = true;
+      window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'Playback test folder';
+        if (command === 'list_scenario_files') return ['transfer.yaml'];
+        if (command === 'read_scenario_file' && args.relativePath === 'transfer.yaml') return yaml;
+        throw new Error('Unexpected command: ' + command);
+      } };
+    }, content);
+    try {
+      await playbackPage.goto('http://127.0.0.1:4179/');
+      await playbackPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+      await playbackPage.getByRole('heading', { name: 'WIN-14 ' + kind }).waitFor();
+      await playbackPage.locator('.scene canvas').waitFor();
+      await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+      const play = playbackPage.getByRole('button', { name: '▶ 再生', exact: true });
+      const pause = playbackPage.getByRole('button', { name: '⏸ 一時停止', exact: true });
+      const finished = playbackPage.getByRole('button', { name: '↺ 最初から再生', exact: true });
+      const start = Date.now();
+      await play.click();
+      if (kind === 'missing') {
+        await playbackPage.locator('.error').filter({ hasText: '復路送信元・復路送信先が未設定' }).waitFor();
+        await play.waitFor();
+        if (await pause.count()) throw new Error('WIN-14: invalid route started');
+      } else {
+        await pause.waitFor();
+        if (kind === 'roundtrip') {
+          await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
+          await delay(1450);
+          await pause.waitFor({ timeout: 500 });
+          await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+        } else if (await playbackPage.getByText(/復路通信内容:/).count()) {
+          throw new Error('WIN-14: one-way transfer displayed reverse payload');
+        }
+        await finished.waitFor({ timeout: 15000 });
+        const elapsed = Date.now() - start;
+        if (elapsed < (kind === 'roundtrip' ? 2200 : 1000)) throw new Error('WIN-14: playback ended too early: ' + elapsed);
+        await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+      }
+      if (playbackErrors.length) throw new Error(playbackErrors.join('\n'));
+      console.log('PASS: WIN-14 ' + kind);
+    } finally {
+      await playbackPage.close();
+    }
+  }
+
   // Tauri保存APIをブラウザ上で模擬し、新規作成→再保存→外部競合を検証する。
   // 画面操作のテストとは別に、エディターが利用する保存経路の契約を確認する。
   await page.evaluate(async () => {
