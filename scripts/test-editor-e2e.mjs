@@ -291,9 +291,9 @@ try {
           await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
           // スクリーンショット取得中はフレームの進行が偏る場合がある。
           // 往路・復路それぞれの中間で一時停止し、静止状態のマーカーを検証する。
-          const checkMarkerLeg = async (leg) => {
+          const checkMarkerLeg = async (leg, attempts = 4) => {
             let detected = false;
-            for (let attempt = 0; attempt < 4 && !detected; attempt++) {
+            for (let attempt = 0; attempt < attempts && !detected; attempt++) {
               const png = await canvas.screenshot({ scale: 'css' });
               detected = await playbackPage.evaluate(async ({ base64, leg }) => {
                 const image = new Image();
@@ -312,9 +312,12 @@ try {
                 };
                 // ノード中心や線の外側で、半径10pxの色付き円を検出する。
                 // 往復の経由点はそれぞれ y=180 / y=440 付近に配置してある。
-                const [top, bottom] = leg === 'forward' ? [160, 260] : [370, 490];
+                // 復路はB側から下方に曲がり、下側の水平区間を通る。
+                // Canvas内の描画位置を広めに走査し、撮影間隔の揺らぎを吸収する。
+                const [top, bottom] = leg === 'forward' ? [160, 260] : [350, 530];
+                const [left, right] = leg === 'forward' ? [485, 645] : [455, 675];
                 for (let y = top + 6; y < Math.min(bottom, image.height - 6); y += 2) {
-                  for (let x = 485; x < Math.min(645, image.width - 6); x += 2) {
+                  for (let x = left + 6; x < Math.min(right, image.width - 6); x += 2) {
                     if (matches(x, y) && matches(x - 4, y - 4) &&
                         matches(x + 4, y - 4) && matches(x - 4, y + 4) &&
                         matches(x + 4, y + 4)) return true;
@@ -324,18 +327,28 @@ try {
               }, { base64: png.toString('base64'), leg });
               if (!detected) await delay(100);
             }
-            if (!detected) throw new Error('WIN-14: missing rendered marker leg: ' + leg);
+            return detected;
           };
           // 片道3000ms、速度1x。最初の1400msは往路中段、
           // 再開後3000msは復路中段に当たる。
           await delay(1400);
           await pause.click();
-          await checkMarkerLeg('forward');
+          if (!await checkMarkerLeg('forward')) throw new Error('WIN-14: missing rendered marker leg: forward');
           await play.click();
-          await delay(3000);
-          await pause.click();
-          await checkMarkerLeg('reverse');
-          await play.click();
+          // 復路上のマーカーが現れるまで実際のCanvasを観察する。
+          // 固定待機時間では、Windows runnerの負荷によって撮影時点が変わる。
+          let reverseDetected = false;
+          const reverseDeadline = Date.now() + 12000;
+          while (Date.now() < reverseDeadline && await pause.count()) {
+            if (await checkMarkerLeg('reverse', 1)) {
+              reverseDetected = true;
+              break;
+            }
+            await delay(80);
+          }
+          if (!reverseDetected) {
+            throw new Error('WIN-14: missing rendered marker leg: reverse (before playback finished)');
+          }
 
           await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
         } else if (await playbackPage.getByText(/復路通信内容:/).count()) {
