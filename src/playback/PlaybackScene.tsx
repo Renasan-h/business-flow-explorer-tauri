@@ -14,7 +14,7 @@ const NODE_HEIGHT = 90;
 const textResolution = () => Math.min(4, Math.max(2, (window.devicePixelRatio || 1) * 2));
 const palette = { technical: { bg: 0x0a1427, node: 0x17375a, border: 0x38bdf8, line: 0x2b648a, text: 0xe2f2ff }, illustration: { bg: 0xf0f5fc, node: 0xffffff, border: 0x5b83d7, line: 0x9ab6d7, text: 0x263d62 } };
 /** PixiJS描画担当。Reactの状態はstateRef経由でTickerに渡し、再生中の再初期化を防ぐ。 */
-export default function Scene({ scenario, step, mode, theme, playing, speed, focus, zoom, pan, onPan, onZoom, onFinished, onSelectActor }: { scenario: Scenario; step: number; mode: Mode; theme: Theme; playing: boolean; speed: PlaybackSpeed; focus: boolean; zoom: number; pan: {x:number;y:number}; onPan: (value: {x:number;y:number}) => void; onZoom: (value: number) => void; onFinished: () => void; onSelectActor: (id: string) => void }) {
+export default function Scene({ playbackRevision, scenario, step, mode, theme, playing, speed, focus, zoom, pan, onPan, onZoom, onFinished, onSelectActor }: { playbackRevision: number; scenario: Scenario; step: number; mode: Mode; theme: Theme; playing: boolean; speed: PlaybackSpeed; focus: boolean; zoom: number; pan: {x:number;y:number}; onPan: (value: {x:number;y:number}) => void; onZoom: (value: number) => void; onFinished: () => void; onSelectActor: (id: string) => void }) {
  const host = useRef<HTMLDivElement>(null);
  const appRef = useRef<Application | null>(null);
  const resizeObserverRef = useRef<ResizeObserver | null>(null);
@@ -23,6 +23,7 @@ export default function Scene({ scenario, step, mode, theme, playing, speed, foc
  const routeRef = useRef<{ start: { x: number; y: number }; end: { x: number; y: number }; duration: number; reverse?: { start: { x: number; y: number }; end: { x: number; y: number } } } | null>(null);
  const elapsedRef = useRef(0);
  const lastStepRef = useRef(step);
+ const lastRevisionRef = useRef(playbackRevision);
  const stateRef = useRef({ playing, speed, onFinished });
  const [ready, setReady] = useState(false);
  const pointerRef = useRef<{ id: number; x: number; y: number; pan: {x:number;y:number} } | null>(null);
@@ -131,9 +132,10 @@ export default function Scene({ scenario, step, mode, theme, playing, speed, foc
   layer.scale.set(zoom);
   layer.position.set(pan.x, pan.y);
   // ステップが変わったときだけ再生位置を初期化し、表示モード変更では維持する。
-  if (lastStepRef.current !== step) {
+  if (lastStepRef.current !== step || lastRevisionRef.current !== playbackRevision) {
    elapsedRef.current = 0;
    lastStepRef.current = step;
+   lastRevisionRef.current = playbackRevision;
   }
   // 表示モードと配色テーマを独立させ、どちらの組み合わせでも視認性を保つ。
   const colors = theme === 'dark' ? palette.technical : palette.illustration;
@@ -309,7 +311,7 @@ export default function Scene({ scenario, step, mode, theme, playing, speed, foc
   const eased = progress * progress * (3 - 2 * progress);
   packet.position.set(leg.start.x + (leg.end.x - leg.start.x) * eased, leg.start.y + (leg.end.y - leg.start.y) * eased);
   label(action.payload, (start.position.x + end.position.x) / 2, (start.position.y + end.position.y) / 2 - 32, 13);
- }, [scenario, step, mode, theme, focus, ready]);
+ }, [scenario, step, mode, theme, focus, ready, playbackRevision]);
 
  // ビューポート操作では描画オブジェクトを作り直さず、拡大率と移動量のみ更新する。
  useEffect(() => {
