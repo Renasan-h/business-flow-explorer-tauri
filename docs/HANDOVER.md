@@ -550,6 +550,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoはPATH上にない。既存のローカル再現版経路計算テストを node --experimental-strip-types --test test.mjs で再実行し10 PASS、0 FAIL。今回の描画変更自体のビルド・E2E・Rust・CI・Windows実機は未実行。
 - 次はorthogonal自動経路とノード境界計算の整合、描画回帰テスト。Windows未検証15件はNOT RUN。
 
+## 9.51 WIN-14 直角配線の共通化（2026-11-25）
+
+- 開始時HEAD `0593132`。仕様・開発ルール・開発ガイド・EditorEdges・connectionRouting・PlaybackSceneを確認。
+- `31033f1`：再生側の独自直線計算を既存routeConnection、routeViaWaypoints、offsetRouteに置換。往復・非アクティブ経路にroutingを適用し、経路識別に配線方式とレーンを含める。編集側と同様にorthogonal時のみ手動経由点を利用する。現時点では再生ノードの固定150×90に合わせて計算し、個別サイズ対応は残る。従来のマーカー半径分の端点余白はなくなるため実描画確認が必要。
+- git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。既存ローカル再現版の経路補間テストを node --experimental-strip-types --test test.mjs で実行し10 PASS、0 FAIL。新しい配線統合のビルド・E2E・Rust・CI・Windows実機は未実行。
+- 次は個別ノードサイズと端点・レーンの整合、直角配線の回帰テスト。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
