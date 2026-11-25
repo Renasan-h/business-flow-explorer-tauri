@@ -284,12 +284,13 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    }
   }
   const packet = new Graphics().circle(0, 0, 10).fill(sendColor).stroke({ color: 0xffffff, width: 2 });
-  layer.addChild(packet);
-  packetRef.current = packet;
   const reverseFrom = currentStep.reverseFrom ? byId.get(currentStep.reverseFrom) : undefined;
   const reverseTo = currentStep.reverseTo ? byId.get(currentStep.reverseTo) : undefined;
   const reverse = currentStep.bidirectional && reverseFrom && reverseTo
    ? drawLane(reverseFrom.id, reverseTo.id, -12, inactiveColor, focus ? 0.65 : 0.24, currentStep.reverseWaypoints, currentStep.routing) : undefined;
+  // 復路の線がマーカーを覆わないよう、通信線を描き終えてからマーカーを最前面へ置く。
+  layer.addChild(packet);
+  packetRef.current = packet;
   const duration = action.durationMs * (reverse ? 2 : 1);
   routeRef.current = { points: sendRoute.points, duration, reverse };
   const returning = Boolean(reverse && elapsedRef.current >= action.durationMs);
