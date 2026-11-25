@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Application, Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { branchGroups, playbackActors, playbackSteps } from '../branchPlayback';
 import { iconCommands, illustrationIconCommands } from '../nodeIconShapes';
+import { routeConnection, routeViaWaypoints, offsetRoute } from '../connectionRouting';
 import { pointAlongRoute, type RoutePoint } from './playbackRoute';
 import type { Scenario } from '../scenario';
 import type { Mode, Theme, PlaybackSpeed } from './types';
@@ -160,29 +161,14 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   };
 
   // 送信と受信の経路を平行に配置し、矢印で通信方向を明示する。
-  const drawLane = (from: { x: number; y: number }, to: { x: number; y: number }, offset: number, color: number, alpha: number, waypoints: RoutePoint[] = []) => {
-   const dx = to.x - from.x;
-   const dy = to.y - from.y;
-   const length = Math.hypot(dx, dy) || 1;
-   const nx = -dy / length;
-   const ny = dx / length;
-   // ノードの矩形境界からさらに玉の半径分を空け、線上だけを移動させる。
-   const radius = 12;
-   const halfWidth = NODE_WIDTH / 2 + radius;
-   const halfHeight = NODE_HEIGHT / 2 + radius;
-   const trim = Math.min(
-    length / 2,
-    Math.min(
-     Math.abs(dx) > 0.0001 ? halfWidth / Math.abs(dx / length) : Infinity,
-     Math.abs(dy) > 0.0001 ? halfHeight / Math.abs(dy / length) : Infinity,
-    ),
-   );
-   const sx = from.x + nx * offset + (dx / length) * trim;
-   const sy = from.y + ny * offset + (dy / length) * trim;
-   const ex = to.x + nx * offset - (dx / length) * trim;
-   const ey = to.y + ny * offset - (dy / length) * trim;
-   const points = [{ x: sx, y: sy }, ...waypoints, { x: ex, y: ey }];
-   const line = new Graphics().moveTo(sx, sy);
+  const routingNodes = actors.map(actor => ({ ...actor, width: NODE_WIDTH, height: NODE_HEIGHT }));
+  const drawLane = (fromId: string, toId: string, offset: number, color: number, alpha: number, waypoints: RoutePoint[] = [], routing: 'straight' | 'orthogonal' = 'straight') => {
+   const base = routing === 'orthogonal' && waypoints.length
+    ? routeViaWaypoints(routingNodes, fromId, toId, waypoints)
+    : routeConnection(routingNodes, fromId, toId, routing);
+   const points = offset ? offsetRoute(base, offset) : base;
+   if (points.length < 2) return { points: [byId.get(fromId)!.position, byId.get(toId)!.position] };
+   const line = new Graphics().moveTo(points[0].x, points[0].y);
    for (const point of points.slice(1)) line.lineTo(point.x, point.y);
    line.stroke({ color, width: 3, alpha });
    const arrow = pointAlongRoute(points, 0.65);
@@ -216,17 +202,17 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   // 有向接続を保持し、逆向きの接続が存在するときだけ2本に分ける。
   const connections = new Set<string>();
   const currentStep = scenario.steps[step];
-  type Connection = { from: string; to: string; waypoints: RoutePoint[]; active: boolean; reverse: boolean };
+  type Connection = { from: string; to: string; waypoints: RoutePoint[]; routing: 'straight' | 'orthogonal'; paired: boolean; active: boolean; reverse: boolean };
   const routes: Connection[] = [];
   for (const [index, scenarioStep] of scenario.steps.entries()) {
    for (const [actionIndex, transfer] of scenarioStep.actions.entries()) {
-    routes.push({ from: transfer.from, to: transfer.to, waypoints: scenarioStep.waypoints ?? [], active: index === step && actionIndex === 0, reverse: false });
+    routes.push({ from: transfer.from, to: transfer.to, waypoints: scenarioStep.waypoints ?? [], routing: scenarioStep.routing ?? 'straight', paired: Boolean(scenarioStep.bidirectional), active: index === step && actionIndex === 0, reverse: false });
    }
    if (scenarioStep.bidirectional && scenarioStep.reverseFrom && scenarioStep.reverseTo)
-    routes.push({ from: scenarioStep.reverseFrom, to: scenarioStep.reverseTo, waypoints: scenarioStep.reverseWaypoints ?? [], active: false, reverse: index === step });
+    routes.push({ from: scenarioStep.reverseFrom, to: scenarioStep.reverseTo, waypoints: scenarioStep.reverseWaypoints ?? [], routing: scenarioStep.routing ?? 'straight', paired: true, active: false, reverse: index === step });
   }
   for (const route of routes) connections.add(JSON.stringify([route.from, route.to]));
-  const routeKey = (route: Connection) => JSON.stringify([route.from, route.to, route.waypoints.map(point => [point.x, point.y])]);
+  const routeKey = (route: Connection) => JSON.stringify([route.from, route.to, route.routing, route.paired || connections.has(JSON.stringify([route.to, route.from])), route.waypoints.map(point => [point.x, point.y])]);
   const activeKeys = new Set(routes.filter(route => route.active || route.reverse).map(routeKey));
   const drawn = new Set<string>();
   let sendRoute: { points: RoutePoint[] } = { points: [start.position, end.position] };
@@ -235,11 +221,11 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    const toActor = byId.get(route.to);
    if (!fromActor || !toActor || route.reverse) continue;
    const key = routeKey(route);
-   const laneOffset = connections.has(JSON.stringify([route.to, route.from])) ? -13 : 0;
+   const laneOffset = (route.paired || connections.has(JSON.stringify([route.to, route.from]))) ? -12 : 0;
    if (route.active) {
-    sendRoute = drawLane(fromActor.position, toActor.position, laneOffset, sendColor, 0.95, route.waypoints);
+    sendRoute = drawLane(route.from, route.to, laneOffset, sendColor, 0.95, route.waypoints, route.routing);
    } else if (!focus && !activeKeys.has(key) && !drawn.has(key)) {
-    drawLane(fromActor.position, toActor.position, laneOffset, inactiveColor, 0.24, route.waypoints);
+    drawLane(route.from, route.to, laneOffset, inactiveColor, 0.24, route.waypoints, route.routing);
     drawn.add(key);
    }
   }
@@ -302,7 +288,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   const reverseFrom = currentStep.reverseFrom ? byId.get(currentStep.reverseFrom) : undefined;
   const reverseTo = currentStep.reverseTo ? byId.get(currentStep.reverseTo) : undefined;
   const reverse = currentStep.bidirectional && reverseFrom && reverseTo
-   ? drawLane(reverseFrom.position, reverseTo.position, -13, inactiveColor, focus ? 0.65 : 0.24, currentStep.reverseWaypoints) : undefined;
+   ? drawLane(reverseFrom.id, reverseTo.id, -12, inactiveColor, focus ? 0.65 : 0.24, currentStep.reverseWaypoints, currentStep.routing) : undefined;
   const duration = action.durationMs * (reverse ? 2 : 1);
   routeRef.current = { points: sendRoute.points, duration, reverse };
   const returning = Boolean(reverse && elapsedRef.current >= action.durationMs);
