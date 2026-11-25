@@ -634,6 +634,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - Rust unit/check・Windows build・配布確認は前段E2E失敗でSKIPPED、成功扱いしない。今回の新SHAに対するCI/E2E/Windows実機は未実行。手動でFull development checks再実行後ログ確認する。
 - Windows受け入れ結果は過去のユーザー報告11 PASS／残15 NOT RUNのまま。ブラウザE2EのWIN-15成功はWindows実機受け入れPASSへの自動繰り上げにはならない。
 
+## 9.62 Full development checks #45655877610 の再失敗対処（2026-11-26）
+
+- 開始時HEAD `8339572`。対象 [Run 45655877610](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45655877610) は同SHAの `develop_tauri` で `failure`。Windows runnerジョブログを取得。
+- npm ci、TypeScript/Webビルド、シナリオ参照、マニフェスト、Chromiumインストールは成功。WIN-15分岐E2EはPASS。WIN-14では往路の静止画像判定を通過し、復路のみ `Error: WIN-14: missing rendered marker leg: reverse` で失敗（scripts/test-editor-e2e.mjs:327）。
+- `ed0a362`：復路に固定3秒待って1回撮影する方式を撤廃。再生中に復路の下部領域を繰り返し撮影し、マーカー出現を検知。画像検査範囲も復路形状に合わせ拡張。時間依存・GPU描画問題が全て解消したとは未検証。
+- 前段E2E失敗によりRust unit/check・Windows build・配布検証はSKIPPED。修正後HEADに対するCI、Windows実機受け入れは未実行。次回Full development checksは手動起動して検証する。
+- 旧Windows実機報告11 PASS、残15 NOT RUNは維持する。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
