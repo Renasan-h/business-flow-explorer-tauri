@@ -507,6 +507,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - 今回のgit ls-remoteは Could not resolve host: github.com、cargoは未導入。E2E・ビルド・Rust・Windows実機・CIは未実行。Windows未検証15件はNOT RUN。
 - 次は最新HEADでnpm run test:allを実行し、WIN-15の描画確認と残ケースを進める。
 
+## 9.45 WIN-15 再生リセットと最終停止（2026-11-25）
+
+- 開始時HEAD `e2857f9`。仕様・開発ルール・開発ガイド・App.tsx・PlaybackScene.tsx・分岐処理・既存E2Eを確認。
+- `e8c6a55`、`41b8d2f`：分岐変更・再開始時にリセット世代を更新し、同一ステップでもPixiJSの経過時間を初期化する。分岐変更時にノード・IF詳細選択も解除。
+- `12a2c80`：分岐再生の最終停止、再再生、分岐変更後の先頭復帰のE2Eを追加。
+- 実際のgit ls-remoteは Could not resolve host: github.com、Node 22.16.0、cargo未導入。ビルド・E2E・Rust・Windows実機・CIは未実行。非選択ノードの実描画確認も残る。Windows未検証15件はNOT RUN。
+- 次は最新HEADでnpm run test:allを実行し、描画確認を進める。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
