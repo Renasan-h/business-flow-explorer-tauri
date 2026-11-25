@@ -536,6 +536,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com、Node v22.16.0、cargoはPATH上にない。E2E・ビルド・Rust・CI・Windows実機は未実行。時間ベースの判定は実行環境の負荷に依存するため要確認。Windows未検証15件はNOT RUN。
 - 次は最新HEADで全テスト実行、往復の描画経路と経由点の確認。
 
+## 9.49 WIN-14 経由点の再生反映（2026-11-25）
+
+- 開始時HEAD `2b00e31`。仕様・開発ルール・開発ガイド・PlaybackScene・scenario・package.jsonを確認。
+- `dc397b9`、`435bb21`：往路・復路の手動経由点を描画線とマーカー移動で共有し、折れ線の距離に応じて補間。現在の復路の重複直線描画を除去。
+- `49885ee`、`0530bd3`：座標計算の10ケースを追加しtest:unitに組み込み。同一内容をローカルに再現しNode v22.16.0で10 PASS、0 FAIL。
+- git ls-remoteは Could not resolve host: github.com。cargoはPATH上にない。全体ビルド・E2E・Rust・CI・Windows実機は未実行。非アクティブ経路の経由点、orthogonal自動経路、端点の境界計算と実描画の整合は残る。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
