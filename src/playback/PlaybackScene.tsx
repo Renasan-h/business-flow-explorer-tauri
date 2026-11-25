@@ -215,30 +215,32 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   // シナリオ全体から通信経路を収集し、未使用中の経路もグレーで表示する。
   // 有向接続を保持し、逆向きの接続が存在するときだけ2本に分ける。
   const connections = new Set<string>();
-  for (const scenarioStep of scenario.steps) {
-   for (const transfer of scenarioStep.actions) {
-    connections.add(JSON.stringify([transfer.from, transfer.to]));
-    // 双方向は通信ステップを増やさず、描画用の逆方向だけを登録する。
-    if (scenarioStep.bidirectional && scenarioStep.reverseFrom && scenarioStep.reverseTo)
-     connections.add(JSON.stringify([scenarioStep.reverseFrom, scenarioStep.reverseTo]));
-   }
-  }
   const currentStep = scenario.steps[step];
-  let sendRoute = { points: [start.position, end.position] };
-  for (const connection of connections) {
-   const [fromId, toId] = JSON.parse(connection) as [string, string];
-   const fromActor = byId.get(fromId);
-   const toActor = byId.get(toId);
-   if (!fromActor || !toActor) continue;
-   const bidirectional = connections.has(JSON.stringify([toId, fromId]));
-   const active = fromId === action.from && toId === action.to;
-   const laneOffset = bidirectional ? -13 : 0;
-   if (active) {
-    sendRoute = drawLane(fromActor.position, toActor.position, laneOffset, sendColor, 0.95, currentStep.waypoints);
-    // 注目表示中も双方向接続の復路を残す。復路は再生ステップを増やさない。
-    // 復路は後段で明示的な送受信先から描画する。
-   } else if (!focus && !(currentStep.bidirectional && fromId === currentStep.reverseFrom && toId === currentStep.reverseTo)) {
-    drawLane(fromActor.position, toActor.position, laneOffset, inactiveColor, 0.24);
+  type Connection = { from: string; to: string; waypoints: RoutePoint[]; active: boolean; reverse: boolean };
+  const routes: Connection[] = [];
+  for (const [index, scenarioStep] of scenario.steps.entries()) {
+   for (const [actionIndex, transfer] of scenarioStep.actions.entries()) {
+    routes.push({ from: transfer.from, to: transfer.to, waypoints: scenarioStep.waypoints ?? [], active: index === step && actionIndex === 0, reverse: false });
+   }
+   if (scenarioStep.bidirectional && scenarioStep.reverseFrom && scenarioStep.reverseTo)
+    routes.push({ from: scenarioStep.reverseFrom, to: scenarioStep.reverseTo, waypoints: scenarioStep.reverseWaypoints ?? [], active: false, reverse: index === step });
+  }
+  for (const route of routes) connections.add(JSON.stringify([route.from, route.to]));
+  const routeKey = (route: Connection) => JSON.stringify([route.from, route.to, route.waypoints.map(point => [point.x, point.y])]);
+  const activeKeys = new Set(routes.filter(route => route.active || route.reverse).map(routeKey));
+  const drawn = new Set<string>();
+  let sendRoute: { points: RoutePoint[] } = { points: [start.position, end.position] };
+  for (const route of routes) {
+   const fromActor = byId.get(route.from);
+   const toActor = byId.get(route.to);
+   if (!fromActor || !toActor || route.reverse) continue;
+   const key = routeKey(route);
+   const laneOffset = connections.has(JSON.stringify([route.to, route.from])) ? -13 : 0;
+   if (route.active) {
+    sendRoute = drawLane(fromActor.position, toActor.position, laneOffset, sendColor, 0.95, route.waypoints);
+   } else if (!focus && !activeKeys.has(key) && !drawn.has(key)) {
+    drawLane(fromActor.position, toActor.position, laneOffset, inactiveColor, 0.24, route.waypoints);
+    drawn.add(key);
    }
   }
 
