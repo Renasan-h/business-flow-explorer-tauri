@@ -565,6 +565,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。既存ローカル再現版の経路補間テストを実行し10 PASS、0 FAIL。今回のサイズ変更自体のビルド・E2E・Rust・CI・Windows実機は未実行。既存WIN-15の固定座標画像テストも再確認が必要。
 - 次はマーカー端点余白と直角配線・個別サイズの回帰テスト。Windows未検証15件はNOT RUN。
 
+## 9.53 WIN-14 マーカー端点余白（2026-11-25）
+
+- 開始時HEAD `9d354a3`。仕様・開発ルール・開発ガイド・PlaybackScene・playbackRoute・既存テストを確認。
+- `60d1961`、`c5ded1c`：描画線は維持し、マーカーのみ経路長の両端12pxを除いた範囲で移動。短い経路は中央に留め、初期位置とTickerに適用。斜め・折返し・重複ノードでの矩形との厳密な非接触は保証しない。
+- `5de145f`：端点余白8ケース追加。ローカル再現コードで node --experimental-strip-types --test /tmp/bfe-route/test.mjs を実行し18 PASS、0 FAIL、0 SKIP（Node v22.16.0）。
+- 今回もgit ls-remoteは Could not resolve host: github.com、cargoはPATH上にない。全体ビルド・E2E・Rust・CI・Windows実機は未実行。Windows未検証15件はNOT RUN。
+- 次は直角配線・個別サイズの回帰テストと実描画検証。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
