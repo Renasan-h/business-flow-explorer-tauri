@@ -529,6 +529,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - 今回のgit ls-remoteは実行したが Could not resolve host: github.com。Node v22.16.0、cargoはPATH上に存在しない。E2E・ビルド・Rust・CI・Windows実機は未実行。座標・画面サイズの前提も未検証。Windows未検証15件はNOT RUN。
 - 次は最新HEADで全テスト実行とWIN-14双方向通信検証。
 
+## 9.48 WIN-14 双方向再生の回帰テスト（2026-11-25）
+
+- 開始時HEAD `c587eb2`。仕様・開発ルール・開発ガイド・Windows受け入れ条件・PlaybackScene・PlaybackControls・App・scenarioを確認。
+- `2d2c8fa`：往復、片方向、復路欠落の3ケースをPlaywrightに追加。往復1ステップ、再生継続時間、最終停止、復路内容表示、欠落時のエラーと再生拒否を検証する。Tauri IPCはモック。実際の玉の移動方向や経由点の描画は未検証。
+- git ls-remoteは Could not resolve host: github.com、Node v22.16.0、cargoはPATH上にない。E2E・ビルド・Rust・CI・Windows実機は未実行。時間ベースの判定は実行環境の負荷に依存するため要確認。Windows未検証15件はNOT RUN。
+- 次は最新HEADで全テスト実行、往復の描画経路と経由点の確認。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
