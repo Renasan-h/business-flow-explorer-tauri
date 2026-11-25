@@ -70,3 +70,6 @@ for (const distance of [-12,12]) test('orthogonal offset '+distance,()=>{
 test('orthogonal reverse offset',()=>assert.deepEqual(offsetRoute([c,b,a],-12),[{x:88,y:300},{x:88,y:12},{x:0,y:12}]));
 test('duplicate corner offset',()=>assert.deepEqual(offsetRoute([a,b,b,c],12),offsetRoute([a,b,c],12)));
 test('zero offset',()=>assert.deepEqual(offsetRoute([a,b,c],0),[a,b,c]));
+
+test('hairpin offset',()=>assert.deepEqual(offsetRoute([a,b,a],12),[{x:0,y:12},{x:100,y:12},{x:100,y:-12},{x:0,y:-12}]));
+test('short orthogonal segment',()=>{ const p=offsetRoute([a,{x:4,y:0},{x:4,y:100}],12); assert.ok(orthogonal(p)); assert.ok(p[1].x>0 && p[1].x<4); assert.ok(p[0].y>0 && p[0].y<2); });
