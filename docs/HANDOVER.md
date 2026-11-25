@@ -609,6 +609,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは実際に exit 128 / Could not resolve host: github.com。Node v22.16.0、cargoなし。全体ビルド・E2E・Rust・CI・Windows実機は未実行。Windows未検証15件はNOT RUN。
 - 次は折返し・短区間の角補正と実画面E2E実行環境確保。
 
+## 9.59 WIN-14 折返し・短区間補正（2026-11-26）
+
+- 開始時HEAD `6ff7d6f`。仕様・開発ルール・開発ガイド・経路計算・テストを確認。
+- `8446633`：offsetRouteの反転箇所に2点を生成し、短区間を含む折れ線のオフセット幅を最短区間長/2.01以下に制限。全経路のレーン間隔が狭まるトレードオフあり。任意角度・障害物との干渉は未保証。
+- `d59b1fd`：折返しと短区間の2ケース追加。ローカル転記版 /tmp/bfe-actual で node --experimental-strip-types --test scripts/test-playback-route.mjs を実行。修正前28 PASS/2 FAIL、修正後30 PASS/0 FAIL/0 SKIP（短区間の期待値は修正後に厳密な座標から不等式へ変更）。
+- GitHub API更新の初回内部エラーは再試行で解消。git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。全体ビルド・E2E・Rust・CI・Windows実機は未実行。
+- 次は経路の追加修正より既存E2E実行環境確保とP0受け入れ検証を優先。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
