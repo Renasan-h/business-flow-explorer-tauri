@@ -601,6 +601,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com、cargoなし。全体ビルド・E2E・Rust・CI・Windows実機は未実行。Windows未検証15件はNOT RUN。
 - offsetRouteの角で法線平均により直角が斜めになる問題をコード上確認。次は角の回帰テストと修正、E2E実行環境確保。
 
+## 9.58 WIN-14 直角レーン角補正（2026-11-26）
+
+- 開始時HEAD `35af366`。仕様・開発ルール・開発ガイド・経路計算・単体テストを確認。
+- `3ac84d5`：offsetRouteの直角部分は法線の平均でなく合計（移動後の直線の交点）を使用。連続重複点を除外、ゼロ距離は原経路を返す。180度折返し・短い区間の逆転・非直角の補正は残課題。
+- `8e41274`：正負の直角オフセット、復路、重複点、ゼロ距離の5ケース追加。ローカル転記版 /tmp/bfe-actual で node --experimental-strip-types --test scripts/test-playback-route.mjs を実行。修正前24 PASS/4 FAIL、修正後28 PASS/0 FAIL/0 SKIP。
+- git ls-remoteは実際に exit 128 / Could not resolve host: github.com。Node v22.16.0、cargoなし。全体ビルド・E2E・Rust・CI・Windows実機は未実行。Windows未検証15件はNOT RUN。
+- 次は折返し・短区間の角補正と実画面E2E実行環境確保。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
