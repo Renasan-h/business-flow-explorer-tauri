@@ -580,6 +580,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。既存ローカル再現版18ケースを再実行し18 PASS、0 FAIL、0 SKIP。新規5ケースはローカルに対象モジュールがないため未実行。全体ビルド・E2E・Rust・CI・Windows実機も未実行。
 - 次は新規5ケースの実行、往復実描画E2E、個別サイズの実画面クリック検証。Windows未検証15件はNOT RUN。
 
+## 9.55 WIN-14 画面回帰ケース（2026-11-26）
+
+- 開始時HEAD `23adf2a`。仕様・開発ルール・開発ガイド・PlaybackScene・既存E2Eを確認。
+- `ec350e4`：WIN-14のYAMLを240×120の対称配置に変更し、旧固定幅の外側で詳細表示、新サイズ外で非選択を確認するケースを追加。往復シナリオに直角配線と上下別の経由点を設定。実際のマーカー座標の画像検証はまだない。固定座標は初期倍率1・パン0を前提とし実行確認が必要。
+- git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。ローカル再現版を node --experimental-strip-types --test test.mjs で実行し18 PASS、0 FAIL、0 SKIP。新規5単体ケース、全体ビルド・E2E・Rust・CI・Windows実機は未実行。
+- 次は往復マーカーの実描画検証と新規単体ケース実行。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
