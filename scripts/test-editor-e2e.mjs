@@ -178,7 +178,18 @@ try {
       await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
       await branchPage.locator('.explanation h2').filter({ hasText: branch + '-end' }).waitFor();
     }
-    console.log('PASS: WIN-15 branch selector A/B/A and step reset');
+    // 実際のTickerで最後まで進み、停止後の再生と分岐変更を確認する。
+    await selector.selectOption('b-start');
+    await branchPage.locator('.scene canvas').waitFor();
+    await branchPage.getByRole('button', { name: '▶ 再生', exact: true }).click();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).waitFor({ timeout: 15000 });
+    await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).click();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).waitFor({ timeout: 15000 });
+    await selector.selectOption('a-start');
+    await branchPage.getByText('STEP 1 / 2', { exact: true }).waitFor();
+    await branchPage.getByRole('button', { name: '▶ 再生', exact: true }).waitFor();
+    console.log('PASS: WIN-15 branch selector A/B/A, step reset, playback completion and replay');
   } finally {
     await branchPage.close();
   }
