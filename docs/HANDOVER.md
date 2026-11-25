@@ -617,6 +617,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - GitHub API更新の初回内部エラーは再試行で解消。git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoなし。全体ビルド・E2E・Rust・CI・Windows実機は未実行。
 - 次は経路の追加修正より既存E2E実行環境確保とP0受け入れ検証を優先。Windows未検証15件はNOT RUN。
 
+## 9.60 CI実行状況確認（2026-11-26）
+
+- HEAD `a791b6a` のActions実行件数はAPIで0件。直近run 44578013972は別SHAでfailure、stepsなし。原因は未確定。
+- 現接続には新規workflow_dispatch操作がなく、CI未実行。直接Gitはexit 128 / Could not resolve host: github.com。Cargoなし。
+- ローカル転記版の経路30件・保存前検証26件を再実行し56 PASS、0 FAIL、0 SKIP。完全チェックアウトではない。Windows残15件はNOT RUN。
+- 次はFrontend checksをGitHub画面で手動起動し、結果を確認する。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
