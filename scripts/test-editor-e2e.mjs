@@ -139,8 +139,8 @@ try {
   const branchYaml = stringify({
     schemaVersion: '1.0',
     metadata: { id: 'branch-test', title: 'WIN-15 branch test', description: '', category: 'test' },
-    actors: ['decision', 'a', 'b', 'shared'].map(id => ({
-      id, name: id, type: id === 'decision' ? 'decision' : 'server',
+    actors: [['decision', 350, 310], ['a', 550, 210], ['b', 550, 410], ['shared', 750, 310]].map(([id, x, y]) => ({
+      id, name: id, type: id === 'decision' ? 'decision' : 'server', position: { x, y },
     })),
     steps: [
       ['a-start', 'decision', 'a'], ['b-start', 'decision', 'b'],
@@ -174,6 +174,18 @@ try {
       if (labels.join('|') !== '1. ' + branch + '-start|2. ' + branch + '-end') {
         throw new Error('WIN-15: unexpected visible steps: ' + labels.join('|'));
       }
+      // 固定配置は1100×620の中心に対称なので、初期パンは0・倍率は1。
+      const canvas = branchPage.locator('.scene canvas');
+      await canvas.waitFor();
+      for (const [id, x, y] of [[branch, 550, branch === 'a' ? 210 : 410], ['shared', 750, 310]]) {
+        await canvas.click({ position: { x, y } });
+        const dialog = branchPage.getByRole('dialog', { name: id + 'の詳細', exact: true });
+        await dialog.waitFor();
+        await dialog.getByRole('button', { name: '閉じる' }).click();
+        await dialog.waitFor({ state: 'hidden' });
+      }
+      await canvas.click({ position: { x: 550, y: branch === 'a' ? 410 : 210 } });
+      if (await branchPage.getByRole('dialog').count()) throw new Error('WIN-15: excluded actor remained selectable');
       await branchPage.getByRole('button', { name: '次へ ▶' }).click();
       await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
       await branchPage.locator('.explanation h2').filter({ hasText: branch + '-end' }).waitFor();
