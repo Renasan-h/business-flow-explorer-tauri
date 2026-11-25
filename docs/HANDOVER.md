@@ -624,6 +624,16 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - ローカル転記版の経路30件・保存前検証26件を再実行し56 PASS、0 FAIL、0 SKIP。完全チェックアウトではない。Windows残15件はNOT RUN。
 - 次はFrontend checksをGitHub画面で手動起動し、結果を確認する。
 
+## 9.61 Full development checks #45654736280 の失敗対処（2026-11-26）
+
+- 開始時HEAD `e47db8d`。対象Run [45654736280](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45654736280) は `develop_tauri` の同SHA、Windows runnerでfailure。job `Frontend + Rust tests + Rust check` のログ取得。
+- TypeScript/Webビルド、バージョン、シナリオ参照、マニフェスト、Chromiumインストールは成功。Playwrightの `PASS: WIN-15 branch selector A/B/A, step reset, playback completion and replay` を確認。
+- `Verify editor interactions in Chromium` で `Error: WIN-14: missing rendered marker leg: forward` と出力。これは検出されたレーンがforwardのみで、reverseを検出できなかったことを示す。実装不具合かテスト側タイミング依存かは未確定。
+- `2cab2f2`：復路配線がマーカーより前面になる描画順を修正し、マーカーを全通信線の最前面に配置。
+- `edc3eb5`：WIN-14 E2Eを往復それぞれ途中で一時停止させてスクリーンショット判定し、色の許容差・検出範囲を調整。タイミング依存は完全には排除できない。
+- Rust unit/check・Windows build・配布確認は前段E2E失敗でSKIPPED、成功扱いしない。今回の新SHAに対するCI/E2E/Windows実機は未実行。手動でFull development checks再実行後ログ確認する。
+- Windows受け入れ結果は過去のユーザー報告11 PASS／残15 NOT RUNのまま。ブラウザE2EのWIN-15成功はWindows実機受け入れPASSへの自動繰り上げにはならない。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
