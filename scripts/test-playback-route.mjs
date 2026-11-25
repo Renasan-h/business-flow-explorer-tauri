@@ -61,3 +61,12 @@ test('default size and custom hit bounds', () => {
  assert.equal(containsNodePoint(nodes[0],{x:101,y:50}),false);
  assert.equal(containsNodePoint(nodes[0],{x:100,y:51}),false);
 });
+
+for (const distance of [-12,12]) test('orthogonal offset '+distance,()=>{
+ const points=offsetRoute([a,b,c],distance);
+ assert.deepEqual(points,[{x:0,y:distance},{x:100-distance,y:distance},{x:100-distance,y:300}]);
+ assert.ok(orthogonal(points));
+});
+test('orthogonal reverse offset',()=>assert.deepEqual(offsetRoute([c,b,a],-12),[{x:88,y:300},{x:88,y:12},{x:0,y:12}]));
+test('duplicate corner offset',()=>assert.deepEqual(offsetRoute([a,b,b,c],12),offsetRoute([a,b,c],12)));
+test('zero offset',()=>assert.deepEqual(offsetRoute([a,b,c],0),[a,b,c]));
