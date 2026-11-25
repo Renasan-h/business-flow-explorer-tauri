@@ -492,6 +492,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - GitHub APIによる更新は成功。直接Git取得は Could not resolve host: github.com、Cargo未導入。今回の自動テスト・Windows実機・CIは未実行。
 - 次は保存前検証関数の回帰テスト追加と実行、WIN-15画面分岐検証。Windows未検証15件はNOT RUNのまま。
 
+## 9.43 WIN-23 保存前検証の単体テスト（2026-11-25）
+
+- 開始時HEAD `4959842`。仕様・開発ルール・開発ガイドと保存前検証を照合。
+- `2b559c1`：保存前検証関数を直接importするNode単体テスト26件を追加。`5dc6d29`：test:unitに組み込み。
+- Node 22.16.0でGitHub取得内容と同じ関数本体を一時ディレクトリに再現し、新規テストを実行。26件成功、0件失敗。型検査ではなく実行時検証。
+- git ls-remoteは Could not resolve host: github.com、cargoは未導入。リポジトリ全体のビルド・E2E・Rust・Windows実機・CIは未実行。Windows未検証15件はNOT RUN。
+- 次は最新HEADでnpm run test:all、WIN-15の画面分岐検証。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
