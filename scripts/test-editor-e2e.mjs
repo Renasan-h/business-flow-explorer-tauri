@@ -242,12 +242,12 @@ try {
       schemaVersion: '1.0',
       metadata: { id: kind, title: 'WIN-14 ' + kind, description: '', category: 'test' },
       actors: [
-        { id: 'a', name: 'A', type: 'server', position: { x: 200, y: 200 } },
-        { id: 'b', name: 'B', type: 'server', position: { x: 600, y: 200 } },
+        { id: 'a', name: 'A', type: 'server', position: { x: 350, y: 310 }, width: 240, height: 120 },
+        { id: 'b', name: 'B', type: 'server', position: { x: 750, y: 310 }, width: 240, height: 120 },
       ],
       steps: [{
         id: 'transfer', title: 'transfer', description: '',
-        ...(kind === 'roundtrip' ? { bidirectional: true, reverseFrom: 'b', reverseTo: 'a', reversePayload: 'response' } :
+        ...(kind === 'roundtrip' ? { bidirectional: true, reverseFrom: 'b', reverseTo: 'a', reversePayload: 'response', routing: 'orthogonal', waypoints: [{ x: 550, y: 180 }], reverseWaypoints: [{ x: 550, y: 440 }] } :
           kind === 'missing' ? { bidirectional: true, reverseFrom: 'b' } : {}),
         actions: [{ type: 'transfer', from: 'a', to: 'b', payload: 'request', durationMs: 1200 }],
       }],
@@ -267,6 +267,15 @@ try {
       await playbackPage.getByRole('heading', { name: 'WIN-14 ' + kind }).waitFor();
       await playbackPage.locator('.scene canvas').waitFor();
       await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+      // 対称配置なので初期倍率1・パン0。旧固定幅の外側をクリックする。
+      const canvas = playbackPage.locator('.scene canvas');
+      await canvas.click({ position: { x: 450, y: 340 } });
+      const detail = playbackPage.getByRole('dialog', { name: 'Aの詳細', exact: true });
+      await detail.waitFor();
+      await detail.getByRole('button', { name: '閉じる' }).click();
+      await detail.waitFor({ state: 'hidden' });
+      await canvas.click({ position: { x: 480, y: 340 } });
+      if (await playbackPage.getByRole('dialog').count()) throw new Error('WIN-14: outside node selected');
       const play = playbackPage.getByRole('button', { name: '▶ 再生', exact: true });
       const pause = playbackPage.getByRole('button', { name: '⏸ 一時停止', exact: true });
       const finished = playbackPage.getByRole('button', { name: '↺ 最初から再生', exact: true });
