@@ -112,13 +112,15 @@ export function offsetRoute(points: Point[], distance: number): Point[] {
  if (distance === 0) return points;
  points = points.filter((p, i) => i === 0 || p.x !== points[i - 1].x || p.y !== points[i - 1].y);
  if (points.length < 2) return points;
+ const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+ if (points.length > 2) distance = Math.sign(distance) * Math.min(Math.abs(distance), ...lengths.map(length => length / 2.01));
  const segments = points.slice(1).map((point, index) => {
   const dx = point.x - points[index].x;
   const dy = point.y - points[index].y;
   const length = Math.hypot(dx, dy) || 1;
   return { x: -dy / length * distance, y: dx / length * distance };
  });
- return points.map((point, index) => {
+ return points.flatMap((point, index) => {
   if (index === 0) return { x: point.x + segments[0].x, y: point.y + segments[0].y };
   if (index === points.length - 1) {
    const normal = segments[segments.length - 1];
@@ -128,6 +130,7 @@ export function offsetRoute(points: Point[], distance: number): Point[] {
   const next = segments[index];
   // 直角では移動後の2直線の交点を使用する。反転時は別途接続する。
   const dot = (prev.x * next.x + prev.y * next.y) / (distance * distance);
+  if (dot < -1 + 1e-8) return [{ x: point.x + prev.x, y: point.y + prev.y }, { x: point.x + next.x, y: point.y + next.y }];
   if (Math.abs(dot) < 1e-8) return { x: point.x + prev.x + next.x, y: point.y + prev.y + next.y };
   return { x: point.x + (prev.x + next.x) / 2, y: point.y + (prev.y + next.y) / 2 };
  });
