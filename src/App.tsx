@@ -51,6 +51,7 @@ export default function App() {
  const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
  const [selectedInterfaceId, setSelectedInterfaceId] = useState<string | null>(null);
  // 再生開始前に決定する分岐の選択。変更時は再生位置を先頭へ戻す。
+ const [playbackRevision, setPlaybackRevision] = useState(0);
  const [branchChoices, setBranchChoices] = useState<Record<string, string>>({});
  const [error, setError] = useState('');
  const [mode, setMode] = useState<Mode>('technical');
@@ -156,6 +157,7 @@ export default function App() {
   }
   setError('');
   if (finished) {
+   setPlaybackRevision(value => value + 1);
    setFinished(false);
    setStep(0);
   }
@@ -222,6 +224,8 @@ export default function App() {
       {branchGroups(scenario.actors, scenario.steps).map(group => <label key={group.actor.id}>{group.actor.name}
        <select value={branchChoices[group.actor.id] ?? group.options[0].id} onChange={event => {
         setBranchChoices(current => ({ ...current, [group.actor.id]: event.target.value }));
+        setPlaybackRevision(value => value + 1);
+        setSelectedActorId(null); setSelectedInterfaceId(null);
         setPlaying(false); setFinished(false); setStep(0);
        }}>
         {group.options.map(option => <option key={option.id} value={option.id}>{option.branchLabel || option.title}</option>)}
@@ -231,12 +235,12 @@ export default function App() {
      onZoomOut={() => setZoom(v => clampZoom(v / 1.2))}
      onZoomIn={() => setZoom(v => clampZoom(v * 1.2))}
      onResetViewport={resetViewport}
-     onRestart={() => { setPlaying(false); setFinished(false); setStep(0); }}
+     onRestart={() => { setPlaybackRevision(value => value + 1); setPlaying(false); setFinished(false); setStep(0); }}
      onPrevious={() => { setPlaying(false); setFinished(false); setStep(i => i - 1); }}
      onTogglePlayback={togglePlayback}
      onNext={() => { setPlaying(false); setFinished(false); setStep(i => i + 1); }}
      onSpeedChange={setSpeed}/>
-    <div className="scene-size-wrapper" aria-label="右下をドラッグして表示領域の幅と高さを変更できます"><Scene scenario={visibleScenario} step={step} mode={mode} theme={theme} playing={playing} speed={speed} focus={focus} zoom={zoom} pan={pan} onPan={setPan} onZoom={setZoom} onFinished={advance} onSelectActor={setSelectedActorId}/></div><ActorDetailsDrawer actor={scenario.actors.find(item => item.id === selectedActorId) ?? null} onClose={() => setSelectedActorId(null)}/>
+    <div className="scene-size-wrapper" aria-label="右下をドラッグして表示領域の幅と高さを変更できます"><Scene playbackRevision={playbackRevision} scenario={visibleScenario} step={step} mode={mode} theme={theme} playing={playing} speed={speed} focus={focus} zoom={zoom} pan={pan} onPan={setPan} onZoom={setZoom} onFinished={advance} onSelectActor={setSelectedActorId}/></div><ActorDetailsDrawer actor={scenario.actors.find(item => item.id === selectedActorId) ?? null} onClose={() => setSelectedActorId(null)}/>
       <InterfaceDefinitionDrawer interfaceId={selectedInterfaceId} interfaces={scenario.interfaces} onClose={() => setSelectedInterfaceId(null)}/>
        <div className="steps">{routes.map((s, i) => <button key={s.id} className={i === step ? 'selected' : ''} onClick={() => { setPlaying(false); setFinished(false); setStep(i); }}>{i + 1}. {s.title}</button>)}</div><section className="explanation"><h2>{current.title}</h2><p>{current.description}</p><code>{current.actions[0].payload}</code><div className="if-playback-links">{current.forwardIf && <button type="button" className="if-definition-link" onClick={() => setSelectedInterfaceId(current.forwardIf!)}>往路IF: {scenario.interfaces?.find(item => item.id === current.forwardIf)?.name ?? current.forwardIf}</button>}{current.reverseIf && <button type="button" className="if-definition-link" onClick={() => setSelectedInterfaceId(current.reverseIf!)}>復路IF: {scenario.interfaces?.find(item => item.id === current.reverseIf)?.name ?? current.reverseIf}</button>}{current.reversePayload && <p>復路通信内容: {current.reversePayload}</p>}</div></section></>}
    </main>
