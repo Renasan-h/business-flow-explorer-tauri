@@ -177,6 +177,33 @@ try {
       // 固定配置は1100×620の中心に対称なので、初期パンは0・倍率は1。
       const canvas = branchPage.locator('.scene canvas');
       await canvas.waitFor();
+      // ノード内部の文字・アイコン・枠線を避けた点と空白背景を比較する。
+      // PNGはブラウザ自身で復号し、追加の画像ライブラリを必要としない。
+      const deadline = Date.now() + 5000;
+      let rendered = false;
+      while (Date.now() < deadline) {
+        const png = await canvas.screenshot({ scale: 'css' });
+        rendered = await branchPage.evaluate(async ({ base64, branch }) => {
+          const image = new Image();
+          image.src = 'data:image/png;base64,' + base64;
+          await image.decode();
+          const surface = document.createElement('canvas');
+          surface.width = image.width;
+          surface.height = image.height;
+          const ctx = surface.getContext('2d');
+          ctx.drawImage(image, 0, 0);
+          const pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+          if (image.width <= 750 || image.height <= 440) return false;
+          const background = pixel(490, 310);
+          const selected = pixel(490, branch === 'a' ? 210 : 410);
+          const excluded = pixel(490, branch === 'a' ? 410 : 210);
+          const same = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 3);
+          return !same(selected, background) && same(excluded, background);
+        }, { base64: png.toString('base64'), branch });
+        if (rendered) break;
+        await delay(100);
+      }
+      if (!rendered) throw new Error('WIN-15: selected/excluded actor pixels did not match branch ' + branch);
       for (const [id, x, y] of [[branch, 550, branch === 'a' ? 210 : 410], ['shared', 750, 310]]) {
         await canvas.click({ position: { x, y } });
         const dialog = branchPage.getByRole('dialog', { name: id + 'の詳細', exact: true });
