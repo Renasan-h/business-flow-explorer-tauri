@@ -290,7 +290,7 @@ try {
         if (kind === 'roundtrip') {
           await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
           // スクリーンショット取得中はフレームの進行が偏る場合がある。
-          // 往路・復路それぞれの中間で一時停止し、静止状態のマーカーを検証する。
+          // 往路は中間で一時停止し、復路は再生中のCanvasを継続観察する。
           const checkMarkerLeg = async (leg, attempts = 4) => {
             let detected = false;
             for (let attempt = 0; attempt < attempts && !detected; attempt++) {
@@ -329,8 +329,7 @@ try {
             }
             return detected;
           };
-          // 片道3000ms、速度1x。最初の1400msは往路中段、
-          // 再開後3000msは復路中段に当たる。
+          // 片道3000ms、速度1x。1400ms経過後に往路を一時停止する。
           await delay(1400);
           await pause.click();
           if (!await checkMarkerLeg('forward')) throw new Error('WIN-14: missing rendered marker leg: forward');
