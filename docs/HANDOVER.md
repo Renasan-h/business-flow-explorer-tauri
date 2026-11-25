@@ -543,6 +543,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `49885ee`、`0530bd3`：座標計算の10ケースを追加しtest:unitに組み込み。同一内容をローカルに再現しNode v22.16.0で10 PASS、0 FAIL。
 - git ls-remoteは Could not resolve host: github.com。cargoはPATH上にない。全体ビルド・E2E・Rust・CI・Windows実機は未実行。非アクティブ経路の経由点、orthogonal自動経路、端点の境界計算と実描画の整合は残る。Windows未検証15件はNOT RUN。
 
+## 9.50 WIN-14 非アクティブ通信の経由点（2026-11-25）
+
+- 開始時HEAD `376e584`。ユーザー指示によりGitHub API経由の開発を継続する。
+- `7b0f084`：PlaybackScene.tsxで往路・復路の経由点を保持した経路一覧を構築。同じ送受信先でも経由点が異なる通信を区別し、同一経路の重複描画を抑制。非アクティブ経路にも手動経由点を反映する。
+- git ls-remoteは Could not resolve host: github.com。Node v22.16.0、cargoはPATH上にない。既存のローカル再現版経路計算テストを node --experimental-strip-types --test test.mjs で再実行し10 PASS、0 FAIL。今回の描画変更自体のビルド・E2E・Rust・CI・Windows実機は未実行。
+- 次はorthogonal自動経路とノード境界計算の整合、描画回帰テスト。Windows未検証15件はNOT RUN。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
