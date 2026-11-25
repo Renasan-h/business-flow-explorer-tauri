@@ -500,6 +500,13 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - git ls-remoteは Could not resolve host: github.com、cargoは未導入。リポジトリ全体のビルド・E2E・Rust・Windows実機・CIは未実行。Windows未検証15件はNOT RUN。
 - 次は最新HEADでnpm run test:all、WIN-15の画面分岐検証。
 
+## 9.44 WIN-15 分岐選択画面の回帰テスト（2026-11-25）
+
+- 開始時HEAD `768dec1`。仕様・開発ルール・開発ガイド・App.tsx・PlaybackControls・既存E2Eを確認。
+- `ca42337`：Tauri IPCをモックした専用YAMLでA/B/A選択、非選択側ステップの除外、次へ操作、分岐切替時の先頭復帰を検証するPlaywrightケースを追加。PixiJS描画自体の非表示は直接検証していない。
+- 今回のgit ls-remoteは Could not resolve host: github.com、cargoは未導入。E2E・ビルド・Rust・Windows実機・CIは未実行。Windows未検証15件はNOT RUN。
+- 次は最新HEADでnpm run test:allを実行し、WIN-15の描画確認と残ケースを進める。
+
 ## 10. 次の作業
 
 **第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
