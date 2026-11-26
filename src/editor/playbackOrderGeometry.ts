@@ -21,7 +21,7 @@ export function playbackOrderPoint(step: Step, actors: Actor[], steps: Step[]): 
  if (!points || !action) return null;
  const bidirectional = Boolean(step.bidirectional) || steps.some(other => other.actions.some(otherAction =>
   otherAction.from === action.to && otherAction.to === action.from));
- return pointOnRoute(bidirectional ? offsetRoute(points, -12) : points, 0.5);
+ return pointOnRoute(bidirectional && !(step.routing === 'orthogonal' && step.waypoints?.length) ? offsetRoute(points, -12) : points, 0.5);
 }
 
 /** 短い通信線でも操作できる範囲を確保しつつ、経路長に合わせて半径を調整する。 */
