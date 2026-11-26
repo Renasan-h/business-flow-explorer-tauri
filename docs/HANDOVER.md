@@ -649,6 +649,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `b98a125`：WINDOWS_ACCEPTANCE_TESTS.mdに自動検証結果を追記。Windows実機は過去報告11 PASS、残15 NOT RUN。新しいアプリ本体変更なし。今回のドキュメント更新SHAに対するCIは未実行。
 - 次は生成済みPortable ZIPでWindows実機受け入れを優先。GHAは手動のみ。不要な再実行は避ける。
 
+## 9.64 CI単体テスト実行漏れの補完（2026-11-26）
+
+- 開始時HEAD `1b77946`。仕様・開発ルール・開発ガイド・E2E・package.json・ワークフローを確認。
+- Full development checksは編集検証26件・再生経路30件を実行していなかった。Frontend checksもbuild:webのみだった。
+- `5066894`：full-check.ymlに両単体テストを追加（develop_tauriのみ）。`5b7d391`：frontend-check.ymlをnpm run test:unitへ変更。手動起動は維持。
+- アプリ本体変更なし。今回のCIは未実行。過去の56件ローカル転記版成功を新CI成功とは扱わない。次回手動CIで確認。
+- Windows実機残15件はNOT RUNを維持。
+
 ## 10. 次の作業
 
 **第一候補：CI成功済みの配布物を用いたWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
