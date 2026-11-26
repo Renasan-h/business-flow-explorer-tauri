@@ -234,8 +234,8 @@ export async function loadScenario(path: string, recovery?: { errors: string[]; 
  if (!result.root) throw new Error('親シナリオにはschemaVersionとmetadataが必要です');
  // ローカルの編集中ドラフトは空でも読み込める。再生用の同梱シナリオは従来どおり検証する。
  const isNativeDraft = path.startsWith('/scenarios/native/');
- if (!recovery && !isNativeDraft && result.actors.length < 2) throw new Error('actorは2件以上必要です');
- if (!recovery && !isNativeDraft && result.steps.length === 0) throw new Error('stepは1件以上必要です');
+ if (!isNativeDraft && result.actors.length < 2) { if (!recovery) throw new Error('actorは2件以上必要です'); recovery.errors.push('actorは2件以上必要です'); }
+ if (!isNativeDraft && result.steps.length === 0) { if (!recovery) throw new Error('stepは1件以上必要です'); recovery.errors.push('stepは1件以上必要です'); }
  const ids = new Set(result.actors.map(item => item.id));
  const groupIds = new Set<string>();
  for (const group of result.root.groups ?? []) {
