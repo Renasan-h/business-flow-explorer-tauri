@@ -4,9 +4,10 @@ const playbackSpeeds: PlaybackSpeed[] = [0.5, 1, 1.5, 2];
 
 /** ビューポート操作とステップ再生操作の表示を担当する。状態は親から受け取る。 */
 export default function PlaybackControls({
- zoom, step, stepCount, playing, finished, speed,
+ zoom, step, stepCount, playing, finished, speed, playbackDisabled = false,
  onZoomOut, onZoomIn, onResetViewport, onRestart, onPrevious, onTogglePlayback, onNext, onSpeedChange,
 }: {
+ playbackDisabled?: boolean;
  zoom: number;
  step: number;
  stepCount: number;
@@ -33,7 +34,7 @@ export default function PlaybackControls({
   <div className="controls">
    <button type="button" onClick={onRestart}>↺</button>
    <button type="button" disabled={step === 0} onClick={onPrevious}>◀ 前へ</button>
-   <button type="button" onClick={onTogglePlayback}>{playing ? '⏸ 一時停止' : finished ? '↺ 最初から再生' : '▶ 再生'}</button>
+   <button type="button" disabled={playbackDisabled} onClick={onTogglePlayback}>{playing ? '⏸ 一時停止' : finished ? '↺ 最初から再生' : '▶ 再生'}</button>
    <button type="button" disabled={step === stepCount - 1} onClick={onNext}>次へ ▶</button>
    <div className="playback-speed" role="group" aria-label="再生速度">
     <span className="playback-speed-label">再生速度</span>
