@@ -165,7 +165,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
    const base = routing === 'orthogonal' && waypoints.length
     ? routeViaWaypoints(routingNodes, fromId, toId, waypoints)
     : routeConnection(routingNodes, fromId, toId, routing);
-   const points = offset ? offsetRoute(base, offset) : base;
+   const points = offset && !(routing === 'orthogonal' && waypoints.length) ? offsetRoute(base, offset) : base;
    if (points.length < 2) return { points: [byId.get(fromId)!.position, byId.get(toId)!.position] };
    const line = new Graphics().moveTo(points[0].x, points[0].y);
    for (const point of points.slice(1)) line.lineTo(point.x, point.y);
