@@ -27,7 +27,7 @@ npm run dev
 
 ```powershell
 npm test                # TypeScript・YAML参照・Playwright E2E・Rustテスト
-npm run test:unit       # TypeScriptビルド・バージョン・YAML参照検証
+npm run test:unit       # TypeScriptビルド・バージョン・YAML参照・編集データ・再生経路検証
 npm run test:e2e        # Playwright E2Eのみ
 npm run test:rust       # Rustユニットテストのみ
 npm run test:all        # 上記 + Rust compile check
@@ -58,7 +58,7 @@ npm run build
 
 NSISインストーラー：`src-tauri/target/release/bundle/nsis/`。
 
-`Full development checks` はActions画面から `develop_tauri` を指定して手動実行した場合に、フロントエンドビルド、マニフェスト検証、Chromium E2E、アイコン検証、Rustテスト・チェック、Windowsビルド、配布物の存在確認、開発用Artifactアップロードを行います。 `main` ではWebラッパーの準備・ビルド経路が使用されます。
+`Full development checks` はActions画面から `develop_tauri` を指定して手動実行した場合に、フロントエンドビルド、編集データ・再生経路の単体テスト、マニフェスト検証、Chromium E2E、アイコン検証、Rustテスト・チェック、Windowsビルド、配布物の存在確認、開発用Artifactアップロードを行います。 `main` ではWebラッパーの準備・ビルド経路が使用されます。
 
 正式配布は `Tauri Windows release build` を `main` で手動実行します。 `release_ref` には `main` に含まれるSHAまたはタグを指定します。Artifact名：
 
