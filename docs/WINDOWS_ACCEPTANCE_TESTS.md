@@ -115,3 +115,20 @@ FAILの再現手順・スクリーンショット:
 | WIN-26 | NOT RUN | 既存のドラッグ、キャンセル、矢印キー、Undo/Redoに、変更後の順序を保存し再読込後の再生一覧で比較する検証を追加。未実施 |
 
 `npm run test:unit` は成功。Playwright用Chromiumの取得はHTTP 403、`PLAYWRIGHT_CHROMIUM_EXECUTABLE=/usr/bin/chromium npm run test:e2e` はChromium起動時のソケット作成拒否で、テスト開始前に終了した。Rustテストと `cargo check` はCargo未導入のため実行不可。GitHub Actionsは起動していない。
+
+## 2026-11-26 CI再検証結果
+
+対象SHA `69e6cb8d2ebb1ea02418f4a6925bab171164767e`。Windows runner上のFull development checksが [45670358366](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45670358366) と [45672819318](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45672819318) の2回とも成功。ジョブログを確認済み。
+
+| 対象 | 自動検証結果 |
+| --- | --- |
+| WIN-14 | 往復・片方向・復路未設定のE2E成功 |
+| WIN-15 | A/B/A切替・再生完了・再再生のE2E成功 |
+| WIN-16 | 参照深さ32/33・循環・ルート逸脱の検証成功 |
+| WIN-18〜21 | Undo/Redo・30%ドラッグ・負座標中央表示・複数選択のE2E成功 |
+| WIN-23 | 空データ・通信なしの保存拒否E2E成功 |
+| WIN-25・26 | 削除キー・再生順変更とUndo/Redo・YAML順序のE2E成功 |
+| Rust | 26件成功、失敗0件 |
+| 配布 | Windowsビルド・配布物検証・Artifactアップロード成功 |
+
+ブラウザE2EとRustテストの成功を記録したもので、WebView2実機操作の代替ではない。過去の実機報告11 PASS、残15 NOT RUNは維持。次は同SHAのPortable ZIPを用いてWIN-04・08・14〜26の実機検証を行う。未実施の詳細条件は各ケースの期待結果を参照。
