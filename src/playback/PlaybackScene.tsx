@@ -143,10 +143,11 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   // layoutActorsが算出したワールド座標をそのまま使い、拡大縮小はステージ側で処理する。
   const actors = scenario.actors;
   const byId = new Map(actors.map(actor => [actor.id, actor]));
-  const action = scenario.steps[step].actions[0];
-  const start = byId.get(action.from);
-  const end = byId.get(action.to);
-  if (!start || !end) return;
+  const action = scenario.steps[step]?.actions[0];
+  const start = action ? byId.get(action.from) : undefined;
+  const end = action ? byId.get(action.to) : undefined;
+  routeRef.current = null;
+  packetRef.current = null;
 
   const label = (value: string, x: number, y: number, size = 14, wrapWidth = 220) => {
    const text = new Text({ text: value, resolution: textResolution(), style: new TextStyle({
@@ -214,7 +215,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
   const routeKey = (route: Connection) => JSON.stringify([route.from, route.to, route.routing, route.paired || connections.has(JSON.stringify([route.to, route.from])), route.waypoints.map(point => [point.x, point.y])]);
   const activeKeys = new Set(routes.filter(route => route.active || route.reverse).map(routeKey));
   const drawn = new Set<string>();
-  let sendRoute: { points: RoutePoint[] } = { points: [start.position, end.position] };
+  let sendRoute: { points: RoutePoint[] } = { points: start && end ? [start.position, end.position] : [] };
   for (const route of routes) {
    const fromActor = byId.get(route.from);
    const toActor = byId.get(route.to);
@@ -231,7 +232,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
 
   for (const actor of actors) {
    const { width, height } = nodeSize(actor);
-   const active = actor.id === action.from || actor.id === action.to;
+   const active = actor.id === action?.from || actor.id === action?.to;
    const g = new Graphics()
     .roundRect(actor.position.x - width / 2, actor.position.y - height / 2, width, height, mode === 'illustration' ? 20 : 12)
     .fill(actor.color ? Number.parseInt(actor.color.slice(1), 16) : (active ? (theme === 'dark' ? 0x205a83 : 0xdbeafe) : colors.node))
@@ -283,6 +284,7 @@ export default function Scene({ playbackRevision, scenario, step, mode, theme, p
     label(details.join('  /  '), actor.position.x, actor.position.y - height / 2 - 13, 11);
    }
   }
+  if (!action || !start || !end || !currentStep) return;
   const packet = new Graphics().circle(0, 0, 10).fill(sendColor).stroke({ color: 0xffffff, width: 2 });
   const reverseFrom = currentStep.reverseFrom ? byId.get(currentStep.reverseFrom) : undefined;
   const reverseTo = currentStep.reverseTo ? byId.get(currentStep.reverseTo) : undefined;
