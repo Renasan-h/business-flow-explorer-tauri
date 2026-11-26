@@ -46,7 +46,7 @@ const NODE_HEIGHT = 76;
 
 /** 編集画面は初期データをコピーして保持する。通常再生データは直接変更しない。 */
 /** 編集結果を単一ファイルのシナリオとして出力し、ファイル参照の解決を不要にする。 */
-export default function FlowEditor({ initial, onClose, scenarioPath, createNew }: { initial: Scenario; onClose: () => void; scenarioPath?: string; createNew?: boolean }) {
+export default function FlowEditor({ initial, onClose, scenarioPath, createNew, loadErrors = [], unsafeRecovery = false }: { initial: Scenario; onClose: () => void; scenarioPath?: string; createNew?: boolean; loadErrors?: string[]; unsafeRecovery?: boolean }) {
  // 新規作成か既存編集かはノード数ではなく呼び出し元のモードで判定する。
  const isNew = createNew ?? (initial.actors.length === 0 && initial.steps.length === 0);
  // actors:ノード、steps:通信と再生順。steps配列の並び替えが再生順の変更となる。
@@ -509,8 +509,10 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew }
   // 保存ダイアログ表示中の状態変化に左右されないよう、保存対象を固定する。
   const snapshotAtSave = snapshot();
   setMessage('');
+  if (unsafeRecovery) { setMessage('参照先の領域・IF定義を失う可能性があるため保存できません。元YAMLの参照を修正してください。'); return false; }
   const validationError = validateEditorScenario(actors, steps, groups);
   if (validationError) { setMessage(validationError); return false; }
+  if (loadErrors.some(error => error.includes('steps内のfileには親シナリオ')) && !window.confirm('親シナリオへの不正な参照を直接展開したYAMLとして保存します。参照形式は保持されません。保存しますか？')) return false;
   // file参照は編集結果を参照先へ書き戻さない。変更を黙って破棄しないよう保存を止める。
   for (const reference of templateReferences) {
    const current = JSON.stringify({ actors: actors.filter(item => reference.actorIds.includes(item.id)), steps: steps.filter(item => reference.stepIds.includes(item.id)) });
@@ -728,7 +730,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew }
  return <div className="flow-editor" onPointerDown={event => {
   if (!(event.target as Element).closest('.editor-context-menu')) setContextMenu(null);
  }}>
-  <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button type="button" disabled={!canUndo} onClick={() => restoreHistory(-1)} title="Ctrl+Z">↶ 戻す</button><button type="button" disabled={!canRedo} onClick={() => restoreHistory(1)} title="Ctrl+Y">↷ やり直す</button><button onClick={requestExit}>再生画面へ戻る</button><button onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
+  <div className="editor-header"><div><div className="editor-title-line"><h2>{isNew ? '新規フロー作成' : 'フローエディター'}</h2>{scenarioPath && <span className="editor-target-path">編集対象: {scenarioPath}</span>}</div><p>{isNew ? 'ノードを2件以上追加し、通信線を1件以上作成してからYAMLを保存してください。' : 'ノードをドラッグして配置し、右端の＋から別のノードへドラッグして通信線を作成できます。'}</p></div><div className="editor-header-actions"><button type="button" disabled={!canUndo} onClick={() => restoreHistory(-1)} title="Ctrl+Z">↶ 戻す</button><button type="button" disabled={!canRedo} onClick={() => restoreHistory(1)} title="Ctrl+Y">↷ やり直す</button><button onClick={requestExit}>再生画面へ戻る</button><button disabled={loadErrors.length > 0} onClick={() => setPreview(true)}>▶ プレビュー</button><button className="selected" onClick={() => void save()}>YAMLを保存…</button></div></div>
   <EditorToolbar tool={tool} setTool={setTool} source={source} setSource={setSource} actors={actors} selectedActors={selectedActors} setSelectedActors={setSelectedActors} clearSelection={() => { setSelectedActor(null); setSelectedStep(null); setSelectedGroup(null); }} addActor={addActor} addGroup={addGroup} addInterface={addInterface} openTemplate={() => { setTemplateImportOpen(true); setTemplateError(null); }} zoom={zoom} setZoom={updateZoomAroundCenter} resetView={() => { fitActorsToViewport();}} showLines={showLines} setShowLines={setShowLines} orderMode={orderMode} setOrderMode={setOrderMode} setOrderSource={setOrderSource}/>
   {exitConfirmationOpen && <div className="editor-exit-backdrop" role="presentation">
    <div className="editor-exit-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-exit-title">
@@ -973,7 +975,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew }
       })()}
       {tool === 'multi' && marquee.current && marqueeEnd && <rect className="editor-selection-marquee" x={Math.min(marquee.current.start.x, marqueeEnd.x)} y={Math.min(marquee.current.start.y, marqueeEnd.y)} width={Math.abs(marqueeEnd.x - marquee.current.start.x)} height={Math.abs(marqueeEnd.y - marquee.current.start.y)} pointerEvents="none"/>}
 
-       <EditorNodes actors={actors} selectedActors={selectedActors} tool={tool} source={source} selectedActor={selectedActor} nodeNumbers={nodeNumbers} onClickActor={clickActor} onDeleteActor={deleteActor}/>
+       <EditorNodes errorActorIds={steps.flatMap(step => step.actions.flatMap(action => !actors.some(actor => actor.id === action.from) || !actors.some(actor => actor.id === action.to) ? [action.from, action.to] : []))} actors={actors} selectedActors={selectedActors} tool={tool} source={source} selectedActor={selectedActor} nodeNumbers={nodeNumbers} onClickActor={clickActor} onDeleteActor={deleteActor}/>
       <PlaybackOrderMarkers orderMode={orderMode} steps={steps} orderCursor={orderCursor} orderDragSource={orderDrag.current?.source ?? null} orderSource={orderSource} orderPoint={orderPoint} orderRadius={orderRadius} onStartDrag={(stepId, pointerId, x, y) => { orderDrag.current = { pointerId, source: stepId, x, y, moved: false }; }} onChooseOrder={chooseOrder}/>
      </g>
     </svg>
