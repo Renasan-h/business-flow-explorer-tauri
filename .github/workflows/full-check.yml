@@ -1,8 +1,7 @@
 name: Full development checks
 
 on:
-  push:
-    branches: [develop_tauri, main]
+  # 無料枠節約のためpush時には起動しない。Actions画面から手動実行する。
   workflow_dispatch:
 
 permissions:
@@ -16,7 +15,7 @@ jobs:
   all-checks:
     name: Frontend + Rust tests + Rust check
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,10 +26,15 @@ jobs:
         with:
           workspaces: src-tauri
       - name: Install dependencies
-        run: npm install --no-audit --no-fund --package-lock=false
+        run: npm ci --no-audit --no-fund
       - name: Prepare frontend (development branch)
         if: github.ref == 'refs/heads/develop_tauri'
         run: npm run build:web
+      - name: Verify application versions and scenario references
+        run: npm run check:version && node scripts/test-scenario-fragments.mjs
+      - name: Verify editor validation and playback route unit tests
+        if: github.ref == 'refs/heads/develop_tauri'
+        run: node --experimental-strip-types --test scripts/test-editor-validation.mjs scripts/test-playback-route.mjs
       - name: Verify generated scenario manifest
         if: github.ref == 'refs/heads/develop_tauri'
         run: git diff --exit-code -- public/scenarios/manifest.json
@@ -40,9 +44,60 @@ jobs:
       - name: Check frontend build (main wrapper)
         if: github.ref == 'refs/heads/main'
         run: npm --prefix web run build
+      - name: Install Chromium for browser tests
+        run: npx playwright install chromium
+      - name: Verify editor interactions in Chromium
+        run: node scripts/test-editor-e2e.mjs
       - name: Generate Windows icon
         run: node scripts/generate-icon.mjs
+      - name: Verify Windows application icons
+        run: node scripts/verify-icon.mjs
       - name: Rust unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Rust compile check
         run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Build Windows installer and portable executable
+        if: github.ref == 'refs/heads/develop_tauri'
+        run: npm run build
+      - name: Verify packaged Windows icon and distribution files
+        if: github.ref == 'refs/heads/develop_tauri'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = 'src-tauri/target/release/business-flow-explorer-tauri.exe'
+          if (-not (Test-Path $exe)) { throw "Executable missing: $exe" }
+          $installer = @(Get-ChildItem 'src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File)
+          if ($installer.Count -eq 0) { throw 'NSIS installer missing' }
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Icon]::ExtractAssociatedIcon((Resolve-Path $exe).Path)
+          if ($null -eq $icon) { throw 'Windows executable has no extractable icon' }
+          try {
+            $bitmap = $icon.ToBitmap()
+            try {
+              $colors = @{}
+              for ($y = 0; $y -lt $bitmap.Height; $y += 2) {
+                for ($x = 0; $x -lt $bitmap.Width; $x += 2) {
+                  $color = $bitmap.GetPixel($x, $y)
+                  $colors[$color.ToArgb()] = $true
+                }
+              }
+              if ($colors.Count -lt 5) { throw "Extracted executable icon is blank or monochrome: $($colors.Count) colors" }
+              Write-Host "Executable icon verified: $($bitmap.Width)x$($bitmap.Height), $($colors.Count) colors"
+            } finally { $bitmap.Dispose() }
+          } finally { $icon.Dispose() }
+          New-Item -ItemType Directory -Force -Path 'dist/portable' | Out-Null
+          Copy-Item $exe 'dist/portable/Business Flow Explorer.exe'
+          Compress-Archive -Path 'dist/portable/Business Flow Explorer.exe' -DestinationPath 'dist/BusinessFlowExplorer-portable-windows-x64.zip' -Force
+          if (-not (Test-Path 'dist/BusinessFlowExplorer-portable-windows-x64.zip')) { throw 'Portable ZIP missing' }
+          Write-Host "Installer: $($installer[0].Name)"
+      - name: Upload development Windows installer and portable ZIP
+        if: github.ref == 'refs/heads/develop_tauri'
+        uses: actions/upload-artifact@v4
+        with:
+          name: business-flow-explorer-dev-windows
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            dist/BusinessFlowExplorer-portable-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 7
+

@@ -1,0 +1,310 @@
+import { invoke } from '@tauri-apps/api/core';
+import { z } from 'zod';
+import { parse } from 'yaml';
+import { layoutActors } from './layout';
+import { NODE_TYPES, NODE_ICONS } from './nodeCatalog';
+
+// YAMLは外部入力なので、TypeScript型に加えてZodで実行時に構造を検証する。
+const actor = z.object({
+ id: z.string().min(1),
+ name: z.string().min(1),
+ ip: z.string().optional(),
+ instanceName: z.string().optional(),
+ type: z.enum(NODE_TYPES.map(item => item.value) as [typeof NODE_TYPES[number]['value'], ...typeof NODE_TYPES[number]['value'][]]),
+ // 任意の表示情報。既存YAMLとの互換性のためすべて省略可能。
+ icon: z.enum(NODE_ICONS.map(item => item.value) as [typeof NODE_ICONS[number]['value'], ...typeof NODE_ICONS[number]['value'][]]).optional(),
+ description: z.string().optional(),
+ environment: z.string().optional(),
+ endpoint: z.string().optional(),
+ tags: z.array(z.string()).optional(),
+ // 表示色は#RRGGBBのみ許可し、資料はカンマ区切り入力を配列として保持する。
+ color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+ documents: z.array(z.string().max(300)).max(30).optional(),
+ position: z.object({ x: z.number().finite(), y: z.number().finite() }).optional(),
+ // ノードごとの表示サイズ。未指定の場合は標準サイズを使用する。
+ width: z.number().min(100).max(800).optional(),
+ height: z.number().min(60).max(500).optional(),
+});
+const action = z.object({
+ type: z.literal('transfer'),
+ from: z.string(),
+ to: z.string(),
+ payload: z.string(),
+ durationMs: z.number().finite().positive(),
+});
+const step = z.object({
+ id: z.string().min(1),
+ title: z.string(),
+ description: z.string(),
+ order: z.number().finite().optional(),
+ // 未指定時は直線。折れ線を選んだ通信だけYAMLに保存する。
+ routing: z.enum(['straight', 'orthogonal']).optional(),
+ // 手動折れ線の経由点。順番に通過するワールド座標。
+ waypoints: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).max(100).optional(),
+ // 双方向通信の復路用経由点。往路とは独立して編集・保存する。
+ reverseWaypoints: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).max(100).optional(),
+ // 1件の通信定義で往復2本の接続線を描く。省略時は片方向。
+ bidirectional: z.boolean().optional(),
+ // 双方向時は復路の送受信先を明示的に保存する。
+ reverseFrom: z.string().min(1).optional(),
+ reverseTo: z.string().min(1).optional(),
+ // 往路・復路のIF資料を個別に紐づける。復路は双方向時のみ使用する。
+ forwardIf: z.string().max(300).optional(),
+ reverseIf: z.string().max(300).optional(),
+ reversePayload: z.string().max(3000).optional(),
+ // 条件分岐ノードから出る経路を識別するラベル（例: 成功 / 失敗）。
+ branchLabel: z.string().optional(),
+ actions: z.array(action).min(1),
+});
+const metadata = z.object({
+ id: z.string(),
+ title: z.string(),
+ description: z.string(),
+ category: z.string(),
+});
+// Actor定義とファイル参照を同じ配列に混在させる。
+const actorEntry = z.union([actor, z.object({ file: z.string().min(1) }).strict()]);
+const stepEntry = z.union([step, z.object({
+ file: z.string().min(1),
+ handoff: action.omit({ type: true }).optional(),
+}).strict()]);
+const group = z.object({ id: z.string().min(1), name: z.string().min(1), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(), x: z.number().finite(), y: z.number().finite(), width: z.number().finite().positive(), height: z.number().finite().positive(), memberIds: z.array(z.string().min(1)).optional() });
+const interfaceDefinition = z.object({ id: z.string().min(1), name: z.string().min(1), description: z.string().optional(), fields: z.array(z.object({ name: z.string(), type: z.string(), required: z.boolean().optional(), description: z.string().optional() })).optional() });
+const fragmentSchema = z.object({
+ groups: z.array(group).optional(),
+ interfaces: z.array(interfaceDefinition).optional(),
+ actors: z.array(actorEntry).optional(),
+ steps: z.array(stepEntry).optional(),
+ actorFiles: z.array(z.string().min(1)).optional(),
+});
+const scenarioSchema = fragmentSchema.extend({
+ schemaVersion: z.literal('1.0'),
+ metadata,
+});
+/** 編集画面で外部テンプレートの構造を検証する。参照の再帰展開はloadScenario側が担当する。 */
+export function parseTemplateYaml(text: string) {
+ const parsed: unknown = parse(text);
+ const data = scenarioSchema.parse(parsed);
+ return { actors: (data.actors ?? []).filter((entry): entry is z.infer<typeof actor> => !('file' in entry)), steps: (data.steps ?? []).filter((entry): entry is z.infer<typeof step> => !('file' in entry)), hasReferences: (data.actors ?? []).some(entry => 'file' in entry) || (data.steps ?? []).some(entry => 'file' in entry) || Boolean(data.actorFiles?.length) };
+}
+type Actor = z.infer<typeof actor>;
+type Step = z.infer<typeof step>;
+type ScenarioData = z.infer<typeof scenarioSchema>;
+export type Scenario = Omit<ScenarioData, 'actors' | 'steps'> & {
+ actors: (Actor & { position: { x: number; y: number } })[];
+ steps: Step[];
+ groups?: z.infer<typeof group>[];
+ interfaces?: z.infer<typeof interfaceDefinition>[];
+};
+
+// 同一IDのactorは統合し、同じ項目に異なる値があれば黙って上書きしない。
+function mergeActor(existing: Actor, incoming: Actor): Actor {
+ const result: Actor = { ...existing };
+ for (const key of ['name', 'type', 'ip', 'instanceName', 'icon', 'description', 'environment', 'endpoint', 'tags', 'color', 'documents', 'position', 'width', 'height'] as const) {
+  const previous = existing[key];
+  const next = incoming[key];
+  if (next === undefined) continue;
+  if (previous !== undefined && JSON.stringify(previous) !== JSON.stringify(next)) {
+   throw new Error(`actor "${existing.id}" の ${key} が参照ファイル間で矛盾しています`);
+  }
+  // optionalな属性は、いずれかのファイルに指定があれば採用する。
+  Object.assign(result, { [key]: previous ?? next });
+ }
+ return result;
+}
+
+/** YAMLのファイル参照を再帰的に展開し、ancestorsで循環参照を検知する。 */
+async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: string, recovery?: { errors: string[]; unsafe: boolean }): Promise<{
+ actors: Actor[];
+ steps: Step[];
+ root?: ScenarioData;
+}> {
+ // 参照は読み込み元ファイルを基準とし、scenariosディレクトリ外への移動を禁止する。
+ const url = new URL(path, window.location.origin);
+ if (url.origin !== window.location.origin || !url.pathname.startsWith('/scenarios/')) {
+  throw new Error('参照先は /scenarios/ 内のファイルに限定されます: ' + path);
+ }
+ const canonical = url.pathname;
+ // ローカルシナリオの参照が同梱リソースへ逸脱しないよう、初回のルートを維持する。
+ const expectedRoot = rootPrefix ?? (canonical.startsWith('/scenarios/native/') ? '/scenarios/native/' : '/scenarios/0/');
+ if (!canonical.startsWith(expectedRoot)) {
+  throw new Error('シナリオの参照先が選択中のルート外です: ' + canonical);
+ }
+ if (ancestors.has(canonical)) throw new Error('シナリオの循環参照: ' + [...ancestors, canonical].join(' → '));
+ // 悪意のある/誤設定された深い参照チェーンによる再帰負荷を制限する。
+ if (ancestors.size >= 32) throw new Error('シナリオの参照階層が上限(32)を超えています: ' + canonical);
+ const nextAncestors = new Set([...ancestors, canonical]);
+ const relative = canonical.startsWith('/scenarios/native/') ? canonical.slice('/scenarios/native/'.length) : null;
+ let yaml: string;
+ if (relative !== null) {
+  yaml = await invoke<string>('read_scenario_file', { relativePath: decodeURIComponent(relative) });
+ } else {
+  const bundledPath = import.meta.env.DEV ? canonical : canonical.replace(/^\/scenarios\/0\//, '/scenarios/');
+  let response: Response;
+  try {
+   response = await fetch(bundledPath, { cache: 'no-store' });
+  } catch (error) {
+   throw new Error(`シナリオの取得に失敗しました (${bundledPath}): ${String(error)}`);
+  }
+  if (!response.ok) throw new Error(`シナリオの取得に失敗しました (${bundledPath}): HTTP ${response.status}`);
+  yaml = await response.text();
+ }
+ const parsed: unknown = parse(yaml) ?? {};
+ if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('YAMLのルートはオブジェクトである必要があります: ' + canonical);
+ const isRoot = 'schemaVersion' in parsed || 'metadata' in parsed;
+ const data = isRoot ? scenarioSchema.parse(parsed) : fragmentSchema.parse(parsed);
+ const actors: Actor[] = [];
+ const steps: Step[] = [];
+ const byId = new Map<string, number>();
+ const addActor = (item: Actor) => {
+  const index = byId.get(item.id);
+  if (index === undefined) {
+   byId.set(item.id, actors.length);
+   actors.push(item);
+  } else actors[index] = mergeActor(actors[index], item);
+ };
+ // 共通Actorファイルにはステップを含めない。
+ for (const actorFile of data.actorFiles ?? []) {
+  try {
+  const resolved = new URL(actorFile, url);
+  const fragment = await readFragments(resolved.href, nextAncestors, expectedRoot, recovery);
+  if (fragment.root || fragment.steps.length > 0) {
+   throw new Error('actorFilesにはactorsのみを定義してください: ' + actorFile);
+  }
+  fragment.actors.forEach(addActor);
+  } catch (error) { if (!recovery) throw error; recovery.errors.push(actorFile + ': ' + String(error)); recovery.unsafe = true; }
+ }
+ // actors配列に記述された順番でActor定義と外部ファイルを展開する。
+ for (const entry of data.actors ?? []) {
+  if ('file' in entry) {
+   try {
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
+   if (fragment.root || fragment.steps.length > 0) {
+    throw new Error('actors内のfileにはActor定義のみを指定してください: ' + entry.file);
+   }
+   fragment.actors.forEach(addActor);
+   } catch (error) { if (!recovery) throw error; recovery.errors.push(entry.file + ': ' + String(error)); recovery.unsafe = true; }
+  } else {
+   addActor(entry);
+  }
+ }
+ // stepsの配列順に通常ステップとサブシナリオを展開する。
+ for (const entry of data.steps ?? []) {
+  if ('file' in entry) {
+   try {
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
+   // steps内のfile参照はstepsだけを持つ断片YAMLも許可する。
+   // 親シナリオのschemaVersionとmetadataはloadScenarioで検証する。
+   if (fragment.root) {
+    const message = 'steps内のfileには親シナリオを指定できません: ' + entry.file;
+    if (!recovery) throw new Error(message);
+    recovery.errors.push(message);
+    // 親の領域・IF定義は断片展開では保持できないため、上書きを禁止する。
+    if (fragment.root.groups?.length || fragment.root.interfaces?.length) recovery.unsafe = true;
+   }
+   fragment.actors.forEach(addActor);
+   // ファイル境界の通信を明示した場合は、通常ステップとして挿入する。
+   if (entry.handoff) {
+    if (steps.length === 0) throw new Error('最初のサブシナリオにはhandoffを指定できません: ' + entry.file);
+    steps.push({
+     id: '__handoff__' + steps.length + '_' + steps[steps.length - 1].id,
+     title: 'サブシナリオ間の通信',
+     description: entry.file + ' への通信',
+     actions: [{ type: 'transfer', ...entry.handoff }],
+    });
+   }
+   steps.push(...fragment.steps);
+   } catch (error) { if (!recovery) throw error; recovery.errors.push(entry.file + ': ' + String(error)); recovery.unsafe = true; }
+  } else {
+   steps.push(entry);
+  }
+ }
+ return { actors, steps, root: isRoot ? data as ScenarioData : undefined };
+}
+
+/** エディター用: ネストしたfile参照を安全に再帰展開して読み込む。 */
+export async function loadTemplateFragment(path: string): Promise<{ actors: Actor[]; steps: Step[] }> {
+ const result = await readFragments(path, new Set());
+ if (!result.root) throw new Error('テンプレートにはschemaVersionとmetadataが必要です');
+ return { actors: result.actors, steps: result.steps };
+}
+
+/** YAMLの検証・参照展開・ノード配置を行い、描画用のScenarioを返す。 */
+export async function loadScenario(path: string, recovery?: { errors: string[]; unsafe: boolean }): Promise<Scenario> {
+ const result = await readFragments(path, new Set(), undefined, recovery);
+ if (!result.root) throw new Error('親シナリオにはschemaVersionとmetadataが必要です');
+ // ローカルの編集中ドラフトは空でも読み込める。再生用の同梱シナリオは従来どおり検証する。
+ const isNativeDraft = path.startsWith('/scenarios/native/');
+ if (!isNativeDraft && result.actors.length < 2) { if (!recovery) throw new Error('actorは2件以上必要です'); recovery.errors.push('actorは2件以上必要です'); }
+ if (!isNativeDraft && result.steps.length === 0) { if (!recovery) throw new Error('stepは1件以上必要です'); recovery.errors.push('stepは1件以上必要です'); }
+ const ids = new Set(result.actors.map(item => item.id));
+ const groupIds = new Set<string>();
+ for (const group of result.root.groups ?? []) {
+  if (groupIds.has(group.id)) throw new Error('領域IDが重複しています: ' + group.id);
+  groupIds.add(group.id);
+  for (const memberId of group.memberIds ?? []) {
+   if (!ids.has(memberId)) throw new Error(`領域 "${group.id}" の所属actorが存在しません: ${memberId}`);
+  }
+ }
+ const interfaceIds = new Set<string>();
+ for (const definition of result.root.interfaces ?? []) {
+  if (interfaceIds.has(definition.id)) throw new Error('IF定義IDが重複しています: ' + definition.id);
+  interfaceIds.add(definition.id);
+ }
+ const stepIds = new Set<string>();
+ for (const item of result.steps) {
+  if (stepIds.has(item.id)) throw new Error('step IDが重複しています: ' + item.id);
+  stepIds.add(item.id);
+  for (const transfer of item.actions) {
+   if (!ids.has(transfer.from) || !ids.has(transfer.to)) {
+    const message = `step "${item.id}" の参照先actorが存在しません: ${transfer.from} → ${transfer.to}`;
+    if (!recovery) throw new Error(message);
+    recovery.errors.push(message);
+   }
+  }
+ }
+ // stepsの記述順を維持し、orderなどによる並び替えは行わない。
+ const merged = { ...result.root, actors: result.actors, steps: result.steps };
+ return { ...merged, actors: layoutActors(merged) };
+}
+
+export async function listScenarios(rootId = '0'): Promise<string[]> {
+ if (rootId === 'native') {
+  const files = await invoke<string[]>('list_scenario_files');
+  // 断片ファイルは一覧から除外し、親シナリオだけを表示する。
+  const parents = await Promise.all(files.filter(file => !file.split('/').includes('template')).map(async file => {
+   try {
+    const yaml = await invoke<string>('read_scenario_file', { relativePath: file });
+    const data: unknown = parse(yaml);
+    return data && typeof data === 'object' && 'schemaVersion' in data && 'metadata' in data
+     ? '/scenarios/native/' + file.split('/').map(encodeURIComponent).join('/') : null;
+   } catch (error) {
+    // 破損したYAMLが1件あっても他のシナリオ一覧を表示できるようにする。
+    console.warn('シナリオ一覧から除外:', file, error);
+    return null;
+   }
+  }));
+  return parents.filter((path): path is string => path !== null);
+ }
+ const response = await fetch(import.meta.env.DEV ? `/scenarios/${rootId}/manifest.json` : '/scenarios/manifest.json', { cache: 'no-store' });
+ if (!response.ok) throw new Error('Scenario index load failed');
+ return z.array(z.string()).parse(await response.json()).map(path => path.startsWith(`/scenarios/${rootId}/`) ? path : path.replace(/^\/scenarios\//, `/scenarios/${rootId}/`));
+}
+
+/** 再生開始時だけ双方向の復路設定を検証する。読み込み・編集は妨げない。 */
+export function playbackValidationError(scenario: Pick<Scenario, 'actors' | 'steps'>): string | null {
+ const ids = new Set(scenario.actors.map(actor => actor.id));
+ for (const step of scenario.steps) {
+  if (!step.bidirectional) continue;
+  if (!step.reverseFrom || !step.reverseTo) return `通信「${step.title}」(${step.id}) の復路送信元・復路送信先が未設定です。編集画面で設定してください。`;
+  if (!ids.has(step.reverseFrom) || !ids.has(step.reverseTo)) return `通信「${step.title}」(${step.id}) の復路送信元・復路送信先が存在しないノードを参照しています。`;
+ }
+ return null;
+}
+
+/** 厳密読込は維持し、画面だけ修復可能なデータを取得する。 */
+export async function loadScenarioForEditor(path: string) {
+ const recovery = { errors: [] as string[], unsafe: false };
+ const scenario = await loadScenario(path, recovery);
+ return { scenario, ...recovery };
+}

@@ -1,17 +1,7 @@
 name: Frontend checks
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'scripts/generate-scenario-manifest.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'tsconfig*.json'
-      - 'vite.config.*'
-      - '.github/workflows/frontend-check.yml'
+  # PR作成・更新では起動せず、必要なときだけ手動実行する。
   workflow_dispatch:
 
 permissions:
@@ -26,9 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
       - run: npm ci --no-audit --no-fund
-      - name: TypeScript and frontend build
-        run: npm run build:web
+      - name: Frontend build and unit tests
+        run: npm run test:unit
       - name: Verify scenario manifest
         run: git diff --exit-code -- public/scenarios/manifest.json

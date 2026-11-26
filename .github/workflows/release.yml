@@ -7,6 +7,11 @@ on:
         description: 'Release tag or main commit SHA (must belong to main)'
         required: true
         type: string
+      publish_draft:
+        description: 'Create or update a DRAFT GitHub Release for a version tag (never publish automatically)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -40,6 +45,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Generate Windows icon
         run: node scripts/generate-icon.mjs
+      - name: Verify Windows application icons
+        run: node scripts/verify-icon.mjs
       - name: Test native YAML commands
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Check TypeScript and build frontend
@@ -69,3 +76,62 @@ jobs:
           name: business-flow-explorer-portable-windows-x64
           path: dist/BusinessFlowExplorer-portable-windows-x64.zip
           if-no-files-found: error
+
+  release-draft:
+    name: Attach verified artifacts to draft release
+    needs: windows-release
+    if: ${{ inputs.publish_draft == true && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
+          fetch-depth: 0
+      - name: Validate version tag and main ancestry
+        shell: bash
+        env:
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "A version tag is required for draft release"; exit 1; }
+          git fetch origin main --tags
+          test "$(git rev-parse "refs/tags/$RELEASE_REF^{commit}")" = "$(git rev-parse HEAD)" || { echo "Tag and checkout differ"; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || { echo "Release revision is not on main"; exit 1; }
+          npm run check:version -- "$RELEASE_REF"
+      - name: Download installer artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: business-flow-explorer-windows
+          path: release-assets/installer
+      - name: Download portable artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: business-flow-explorer-portable-windows-x64
+          path: release-assets/portable
+      - name: Create or update draft release only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob globstar
+          files=(release-assets/installer/**/* release-assets/portable/**/*)
+          assets=()
+          for file in "${files[@]}"; do
+            [[ -f "$file" ]] && assets+=("$file")
+          done
+          (( ${#assets[@]} >= 2 )) || { echo "Expected both installer and portable ZIP"; exit 1; }
+          notes_file="docs/RELEASE_NOTES_${RELEASE_REF}.md"
+          [[ -f "$notes_file" ]] || { echo "Release notes not found: $notes_file"; exit 1; }
+          if gh release view "$RELEASE_REF" --json isDraft >/dev/null 2>&1; then
+            is_draft="$(gh release view "$RELEASE_REF" --json isDraft --jq '.isDraft')"
+            [[ "$is_draft" == true ]] || { echo "Refusing to modify a published release"; exit 1; }
+          else
+            gh release create "$RELEASE_REF" --draft --verify-tag --title "Business Flow Explorer $RELEASE_REF" --notes-file "$notes_file"
+          fi
+          gh release upload "$RELEASE_REF" "${assets[@]}" --clobber

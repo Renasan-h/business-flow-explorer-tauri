@@ -1,0 +1,1215 @@
+import { chromium } from 'playwright';
+import { spawn } from 'node:child_process';
+import { parse, stringify } from 'yaml';
+import { readFile } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
+
+// npm経由で起動された場合はnpm CLIのJSエントリポイントをNodeから直接実行する。
+ // Windowsのshell:trueによるDEP0190警告と引数のシェル連結を避ける。
+const npmCli = process.env.npm_execpath;
+const server = npmCli
+  ? spawn(process.execPath, [npmCli, 'run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'], { stdio: 'pipe' })
+  : spawn(process.platform === 'win32' ? 'cmd.exe' : 'npm',
+      process.platform === 'win32'
+        ? ['/d', '/s', '/c', 'npm run dev:web -- --host 127.0.0.1 --port 4179 --strictPort']
+        : ['run', 'dev:web', '--', '--host', '127.0.0.1', '--port', '4179', '--strictPort'],
+      { stdio: 'pipe' });
+let browser;
+let serverFailure;
+let serverOutput = '';
+server.on('error', error => { serverFailure = error; });
+server.on('exit', (code, signal) => {
+  if (!serverFailure) serverFailure = new Error(`Vite process exited (code=${code}, signal=${signal})`);
+});
+for (const stream of [server.stdout, server.stderr]) {
+  stream?.on('data', chunk => { serverOutput = (serverOutput + chunk.toString()).slice(-8000); });
+}
+try {
+  let ready = false;
+  for (let i = 0; i < 60; i++) {
+    if (serverFailure) throw new Error(`Vite server failed: ${serverFailure.message}\n${serverOutput}`);
+    try { const response = await fetch('http://127.0.0.1:4179/'); if (response.ok) { ready = true; break; } } catch {}
+    await delay(1000);
+  }
+  if (!ready) throw new Error(`Vite server did not start within 60 seconds.\n${serverOutput}`);
+  browser = await chromium.launch({
+    headless: true,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+  });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('http://127.0.0.1:4179/');
+  // WIN-16: 実際のsrc/scenario.tsをブラウザでimportし、ネイティブ参照展開を検証する。
+  await page.evaluate(async () => {
+    const originalInternals = window.__TAURI_INTERNALS__;
+    const transfer = (id) => ({
+      id, title: id, description: '', actions: [
+        { type: 'transfer', from: 'a', to: 'b', payload: id, durationMs: 100 },
+      ],
+    });
+    const files = new Map([
+      ['parent.yaml', {
+        schemaVersion: '1.0',
+        metadata: { id: 'parent', title: 'parent', description: '', category: 'test' },
+        actors: [{ file: 'actors.yaml' }],
+        steps: [transfer('first'), { file: 'nested.yaml' }, transfer('last')],
+      }],
+      ['actors.yaml', { actors: [
+        { id: 'a', name: 'A', type: 'server' },
+        { id: 'b', name: 'B', type: 'server' },
+      ] }],
+      ['nested.yaml', { actors: [{ id: 'a', name: 'A', type: 'server' }], steps: [
+        transfer('middle'),
+      ] }],
+      ['conflict.yaml', {
+        schemaVersion: '1.0',
+        metadata: { id: 'conflict', title: 'conflict', description: '', category: 'test' },
+        actors: [{ file: 'actors.yaml' }, { file: 'conflicting-actors.yaml' }],
+        steps: [transfer('conflict-step')],
+      }],
+      ['conflicting-actors.yaml', { actors: [{ id: 'a', name: 'Different A', type: 'server' }] }],
+      ['cycle-a.yaml', { schemaVersion: '1.0', metadata: { id: 'cycle', title: 'cycle', description: '', category: 'test' }, steps: [{ file: 'cycle-b.yaml' }] }],
+      ['cycle-b.yaml', { steps: [{ file: 'cycle-a.yaml' }] }],
+      ['outside.yaml', { schemaVersion: '1.0', metadata: { id: 'outside', title: 'outside', description: '', category: 'test' }, steps: [{ file: '../outside.yaml' }] }],
+    ]);
+    for (let i = 0; i < 33; i++) {
+      files.set(`deep-${i}.yaml`, i === 32 ? { steps: [] } : { steps: [{ file: `deep-${i + 1}.yaml` }] });
+    }
+    files.set('deep-0.yaml', {
+      schemaVersion: '1.0',
+      metadata: { id: 'deep', title: 'deep', description: '', category: 'test' },
+      steps: [{ file: 'deep-1.yaml' }],
+    });
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args) => {
+        if (command !== 'read_scenario_file') throw new Error('Unexpected command: ' + command);
+        const content = files.get(args.relativePath);
+        if (!content) throw new Error('Missing test YAML: ' + args.relativePath);
+        return JSON.stringify(content);
+      },
+    };
+    try {
+      const { loadScenario } = await import('/src/scenario.ts');
+      const scenario = await loadScenario('/scenarios/native/parent.yaml');
+      if (scenario.actors.length !== 2 ||
+          JSON.stringify(scenario.steps.map(step => step.id)) !== JSON.stringify(['first', 'middle', 'last'])) {
+        throw new Error('WIN-16: Actor merge or step order failed');
+      }
+      async function mustReject(path, expected) {
+        try {
+          await loadScenario('/scenarios/native/' + path);
+          throw new Error('WIN-16: unexpected success: ' + path);
+        } catch (error) {
+          if (!String(error).includes(expected)) throw error;
+        }
+      }
+      files.set('parent-reference.yaml', {
+        schemaVersion: '1.0', metadata: { id: 'ref', title: 'ref', description: '', category: 'test' },
+        steps: [{ file: 'parent.yaml' }],
+      });
+      await mustReject('parent-reference.yaml', 'steps内のfileには親シナリオ');
+      const { loadScenarioForEditor } = await import('/src/scenario.ts');
+      const recovered = await loadScenarioForEditor('/scenarios/native/parent-reference.yaml');
+      if (recovered.errors.length !== 1 || recovered.scenario.actors.length !== 2 ||
+          recovered.scenario.steps.length !== 3 || recovered.unsafe) throw new Error('Parent reference recovery failed');
+      const partial = await loadScenarioForEditor('/scenarios/native/outside.yaml');
+      if (!partial.unsafe || !partial.errors.some(message => message.includes('ルート外'))) throw new Error('Unsafe reference recovery failed');
+      console.log('PASS: parent reference recovery and unsafe reference protection');
+      await mustReject('conflict.yaml', '矛盾');
+      await mustReject('cycle-a.yaml', '循環参照');
+      await mustReject('outside.yaml', 'ルート外');
+      await mustReject('deep-0.yaml', '上限(32)');
+    } finally {
+      window.__TAURI_INTERNALS__ = originalInternals;
+    }
+  });
+
+  // WIN-15: 分岐切替で通信と専用ノードを除外し、合流先は残す。
+  await page.evaluate(async () => {
+    const { playbackActors, playbackSteps } = await import('/src/branchPlayback.ts');
+    const actors = ['decision', 'a', 'b', 'shared'].map(id => ({
+      id, type: id === 'decision' ? 'decision' : 'server',
+    }));
+    const steps = [
+      ['a-start', 'decision', 'a'], ['b-start', 'decision', 'b'],
+      ['a-end', 'a', 'shared'], ['b-end', 'b', 'shared'],
+    ].map(([id, from, to]) => ({ id, actions: [{ from, to }] }));
+    for (const branch of ['a', 'b']) {
+      const choices = { decision: branch + '-start' };
+      const stepIds = playbackSteps(actors, steps, choices).map(step => step.id);
+      const actorIds = playbackActors(actors, steps, choices).map(actor => actor.id);
+      if (stepIds.join() !== branch + '-start,' + branch + '-end' ||
+          actorIds.join() !== 'decision,' + branch + ',shared') {
+        throw new Error('WIN-15: unexpected steps or actors for branch ' + branch);
+      }
+    }
+  });
+
+  // WIN-15: 実画面の分岐選択、ステップ一覧、再生位置のリセットを検証する。
+  const branchPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const branchYaml = stringify({
+    schemaVersion: '1.0',
+    metadata: { id: 'branch-test', title: 'WIN-15 branch test', description: '', category: 'test' },
+    actors: [['decision', 350, 310], ['a', 550, 210], ['b', 550, 410], ['shared', 750, 310]].map(([id, x, y]) => ({
+      id, name: id, type: id === 'decision' ? 'decision' : 'server', position: { x, y },
+    })),
+    steps: [
+      ['a-start', 'decision', 'a'], ['b-start', 'decision', 'b'],
+      ['a-end', 'a', 'shared'], ['b-end', 'b', 'shared'],
+    ].map(([id, from, to]) => ({
+      id, title: id, description: '', actions: [{ type: 'transfer', from, to, payload: id, durationMs: 100 }],
+    })),
+  });
+  await branchPage.addInitScript(content => {
+    window.isTauri = true;
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'Branch test folder';
+        if (command === 'list_scenario_files') return ['branch-test.yaml'];
+        if (command === 'read_scenario_file' && args.relativePath === 'branch-test.yaml') return content;
+        throw new Error('Unexpected command: ' + command);
+      },
+    };
+  }, branchYaml);
+  try {
+    await branchPage.goto('http://127.0.0.1:4179/');
+    await branchPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await branchPage.getByRole('heading', { name: 'WIN-15 branch test' }).waitFor();
+    const selector = branchPage.locator('.branch-selector select');
+    const rows = branchPage.locator('.steps button');
+    for (const branch of ['a', 'b', 'a']) {
+      await selector.selectOption(branch + '-start');
+      await branchPage.getByText('STEP 1 / 2', { exact: true }).waitFor();
+      await rows.nth(1).waitFor();
+      const labels = await rows.allTextContents();
+      if (labels.join('|') !== '1. ' + branch + '-start|2. ' + branch + '-end') {
+        throw new Error('WIN-15: unexpected visible steps: ' + labels.join('|'));
+      }
+      // 固定配置は1100×620の中心に対称なので、初期パンは0・倍率は1。
+      const canvas = branchPage.locator('.scene canvas');
+      await canvas.waitFor();
+      // ノード内部の文字・アイコン・枠線を避けた点と空白背景を比較する。
+      // PNGはブラウザ自身で復号し、追加の画像ライブラリを必要としない。
+      const deadline = Date.now() + 5000;
+      let rendered = false;
+      while (Date.now() < deadline) {
+        const png = await canvas.screenshot({ scale: 'css' });
+        rendered = await branchPage.evaluate(async ({ base64, branch }) => {
+          const image = new Image();
+          image.src = 'data:image/png;base64,' + base64;
+          await image.decode();
+          const surface = document.createElement('canvas');
+          surface.width = image.width;
+          surface.height = image.height;
+          const ctx = surface.getContext('2d');
+          ctx.drawImage(image, 0, 0);
+          const pixel = (x, y) => Array.from(ctx.getImageData(x, y, 1, 1).data);
+          if (image.width <= 750 || image.height <= 440) return false;
+          const background = pixel(490, 310);
+          const selected = pixel(490, branch === 'a' ? 210 : 410);
+          const excluded = pixel(490, branch === 'a' ? 410 : 210);
+          const same = (a, b) => a.every((value, i) => Math.abs(value - b[i]) <= 3);
+          return !same(selected, background) && same(excluded, background);
+        }, { base64: png.toString('base64'), branch });
+        if (rendered) break;
+        await delay(100);
+      }
+      if (!rendered) throw new Error('WIN-15: selected/excluded actor pixels did not match branch ' + branch);
+      for (const [id, x, y] of [[branch, 550, branch === 'a' ? 210 : 410], ['shared', 750, 310]]) {
+        await canvas.click({ position: { x, y } });
+        const dialog = branchPage.getByRole('dialog', { name: id + 'の詳細', exact: true });
+        await dialog.waitFor();
+        await dialog.getByRole('button', { name: '閉じる' }).click();
+        await dialog.waitFor({ state: 'hidden' });
+      }
+      await canvas.click({ position: { x: 550, y: branch === 'a' ? 410 : 210 } });
+      if (await branchPage.getByRole('dialog').count()) throw new Error('WIN-15: excluded actor remained selectable');
+      await branchPage.getByRole('button', { name: '次へ ▶' }).click();
+      await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
+      await branchPage.locator('.explanation h2').filter({ hasText: branch + '-end' }).waitFor();
+    }
+    // 実際のTickerで最後まで進み、停止後の再生と分岐変更を確認する。
+    await selector.selectOption('b-start');
+    await branchPage.locator('.scene canvas').waitFor();
+    await branchPage.getByRole('button', { name: '▶ 再生', exact: true }).click();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).waitFor({ timeout: 15000 });
+    await branchPage.getByText('STEP 2 / 2', { exact: true }).waitFor();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).click();
+    await branchPage.getByRole('button', { name: '↺ 最初から再生', exact: true }).waitFor({ timeout: 15000 });
+    await selector.selectOption('a-start');
+    await branchPage.getByText('STEP 1 / 2', { exact: true }).waitFor();
+    await branchPage.getByRole('button', { name: '▶ 再生', exact: true }).waitFor();
+    console.log('PASS: WIN-15 branch selector A/B/A, step reset, playback completion and replay');
+  } finally {
+    await branchPage.close();
+  }
+
+  // WIN-14: 往復を1ステップとして再生し、復路欠落時は再生を拒否する。
+  for (const kind of ['roundtrip', 'oneway', 'missing']) {
+    const playbackPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const playbackErrors = [];
+    playbackPage.on('pageerror', error => playbackErrors.push(error.message));
+    const content = stringify({
+      schemaVersion: '1.0',
+      metadata: { id: kind, title: 'WIN-14 ' + kind, description: '', category: 'test' },
+      actors: [
+        { id: 'a', name: 'A', type: 'server', position: { x: 350, y: 310 }, width: 240, height: 120 },
+        { id: 'b', name: 'B', type: 'server', position: { x: 750, y: 310 }, width: 240, height: 120 },
+      ],
+      steps: [{
+        id: 'transfer', title: 'transfer', description: '',
+        ...(kind === 'roundtrip' ? { bidirectional: true, reverseFrom: 'b', reverseTo: 'a', reversePayload: 'response', routing: 'orthogonal', waypoints: [{ x: 550, y: 180 }], reverseWaypoints: [{ x: 550, y: 440 }] } :
+          kind === 'missing' ? { bidirectional: true, reverseFrom: 'b' } : {}),
+        actions: [{ type: 'transfer', from: 'a', to: 'b', payload: 'request', durationMs: kind === 'roundtrip' ? 3000 : 1200 }],
+      }],
+    });
+    await playbackPage.addInitScript(yaml => {
+      window.isTauri = true;
+      window.__TAURI_INTERNALS__ = { invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'Playback test folder';
+        if (command === 'list_scenario_files') return ['transfer.yaml'];
+        if (command === 'read_scenario_file' && args.relativePath === 'transfer.yaml') return yaml;
+        throw new Error('Unexpected command: ' + command);
+      } };
+    }, content);
+    try {
+      await playbackPage.goto('http://127.0.0.1:4179/');
+      await playbackPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+      await playbackPage.getByRole('heading', { name: 'WIN-14 ' + kind }).waitFor();
+      await playbackPage.locator('.scene canvas').waitFor();
+      await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+      // 対称配置なので初期倍率1・パン0。旧固定幅の外側をクリックする。
+      const canvas = playbackPage.locator('.scene canvas');
+      await canvas.click({ position: { x: 450, y: 340 } });
+      const detail = playbackPage.getByRole('dialog', { name: 'Aの詳細', exact: true });
+      await detail.waitFor();
+      await detail.getByRole('button', { name: '閉じる' }).click();
+      await detail.waitFor({ state: 'hidden' });
+      await canvas.click({ position: { x: 480, y: 340 } });
+      if (await playbackPage.getByRole('dialog').count()) throw new Error('WIN-14: outside node selected');
+      const play = playbackPage.getByRole('button', { name: '▶ 再生', exact: true });
+      const pause = playbackPage.getByRole('button', { name: '⏸ 一時停止', exact: true });
+      const finished = playbackPage.getByRole('button', { name: '↺ 最初から再生', exact: true });
+      const start = Date.now();
+      await play.click();
+      if (kind === 'missing') {
+        await playbackPage.locator('.error').filter({ hasText: '復路送信元・復路送信先が未設定' }).waitFor();
+        await play.waitFor();
+        if (await pause.count()) throw new Error('WIN-14: invalid route started');
+      } else {
+        await pause.waitFor();
+        if (kind === 'roundtrip') {
+          await playbackPage.getByText('復路通信内容: response', { exact: true }).waitFor();
+          // スクリーンショット取得中はフレームの進行が偏る場合がある。
+          // 往路は中間で一時停止し、復路は再生中のCanvasを継続観察する。
+          const checkMarkerLeg = async (leg, attempts = 4) => {
+            let detected = false;
+            for (let attempt = 0; attempt < attempts && !detected; attempt++) {
+              const png = await canvas.screenshot({ scale: 'css' });
+              detected = await playbackPage.evaluate(async ({ base64, leg }) => {
+                const image = new Image();
+                image.src = 'data:image/png;base64,' + base64;
+                await image.decode();
+                const surface = document.createElement('canvas');
+                surface.width = image.width;
+                surface.height = image.height;
+                const ctx = surface.getContext('2d');
+                ctx.drawImage(image, 0, 0);
+                const { data } = ctx.getImageData(0, 0, image.width, image.height);
+                const matches = (x, y) => {
+                  const i = (y * image.width + x) * 4;
+                  return [[34, 211, 238], [37, 99, 235]].some(rgb =>
+                    rgb.every((value, channel) => Math.abs(data[i + channel] - value) <= 12));
+                };
+                // ノード中心や線の外側で、半径10pxの色付き円を検出する。
+                // 往復の経由点はそれぞれ y=180 / y=440 付近に配置してある。
+                // 復路はB側から下方に曲がり、下側の水平区間を通る。
+                // Canvas内の描画位置を広めに走査し、撮影間隔の揺らぎを吸収する。
+                const [top, bottom] = leg === 'forward' ? [160, 260] : [350, 530];
+                const [left, right] = leg === 'forward' ? [485, 645] : [455, 675];
+                for (let y = top + 6; y < Math.min(bottom, image.height - 6); y += 2) {
+                  for (let x = left + 6; x < Math.min(right, image.width - 6); x += 2) {
+                    if (matches(x, y) && matches(x - 4, y - 4) &&
+                        matches(x + 4, y - 4) && matches(x - 4, y + 4) &&
+                        matches(x + 4, y + 4)) return true;
+                  }
+                }
+                return false;
+              }, { base64: png.toString('base64'), leg });
+              if (!detected) await delay(100);
+            }
+            return detected;
+          };
+          // 片道3000ms、速度1x。1400ms経過後に往路を一時停止する。
+          await delay(1400);
+          await pause.click();
+          if (!await checkMarkerLeg('forward')) throw new Error('WIN-14: missing rendered marker leg: forward');
+          await play.click();
+          // 復路上のマーカーが現れるまで実際のCanvasを観察する。
+          // 固定待機時間では、Windows runnerの負荷によって撮影時点が変わる。
+          let reverseDetected = false;
+          const reverseDeadline = Date.now() + 12000;
+          while (Date.now() < reverseDeadline && await pause.count()) {
+            if (await checkMarkerLeg('reverse', 1)) {
+              reverseDetected = true;
+              break;
+            }
+            await delay(80);
+          }
+          if (!reverseDetected) {
+            throw new Error('WIN-14: missing rendered marker leg: reverse (before playback finished)');
+          }
+
+          await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+        } else if (await playbackPage.getByText(/復路通信内容:/).count()) {
+          throw new Error('WIN-14: one-way transfer displayed reverse payload');
+        }
+        await finished.waitFor({ timeout: 15000 });
+        const elapsed = Date.now() - start;
+        if (elapsed < (kind === 'roundtrip' ? 5500 : 1000)) throw new Error('WIN-14: playback ended too early: ' + elapsed);
+        await playbackPage.getByText('STEP 1 / 1', { exact: true }).waitFor();
+      }
+      if (playbackErrors.length) throw new Error(playbackErrors.join('\n'));
+      console.log('PASS: WIN-14 ' + kind);
+    } finally {
+      await playbackPage.close();
+    }
+  }
+
+  // Tauri保存APIをブラウザ上で模擬し、新規作成→再保存→外部競合を検証する。
+  // 画面操作のテストとは別に、エディターが利用する保存経路の契約を確認する。
+  await page.evaluate(async () => {
+    const previous = window.__TAURI_INTERNALS__;
+    const files = new Map();
+    const calls = [];
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args) => {
+        calls.push({ command, ...args });
+        if (command === 'create_scenario_file') {
+          if (files.has(args.relativePath)) throw new Error('既存ファイル');
+          files.set(args.relativePath, args.content);
+        } else if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+        } else {
+          throw new Error('Unexpected Tauri command: ' + command);
+        }
+      },
+    };
+    try {
+      const { saveScenarioYaml } = await import('/src/editor/scenarioPersistence.ts');
+      const options = { scenarioPath: '/scenarios/native/new-flow.yaml', isNew: true, filename: 'new-flow.yaml' };
+      const first = 'metadata: first\\n';
+      const second = 'metadata: second\\n';
+      const created = await saveScenarioYaml({ ...options, yaml: first, nativeCreatedPath: null });
+      if (created.nativeCreatedPath !== 'new-flow.yaml') throw new Error('Initial save did not return created path');
+      await saveScenarioYaml({ ...options, yaml: second, nativeCreatedPath: created.nativeCreatedPath, expectedContent: first });
+      if (files.get('new-flow.yaml') !== second) throw new Error('Second save did not update the created file');
+      if (calls.length !== 2 || calls[0].command !== 'create_scenario_file' ||
+          calls[1].command !== 'write_scenario_file' || calls[1].expectedContent !== first) {
+        throw new Error('New-file save did not switch to checked update');
+      }
+      // 外部アプリによる変更後は、古い原文での再保存を拒否する。
+      files.set('new-flow.yaml', 'metadata: external\\n');
+      let conflicted = false;
+      try {
+        await saveScenarioYaml({ ...options, yaml: 'metadata: editor\\n', nativeCreatedPath: created.nativeCreatedPath, expectedContent: second });
+      } catch (error) {
+        conflicted = String(error).includes('保存競合');
+      }
+      if (!conflicted || files.get('new-flow.yaml') !== 'metadata: external\\n') {
+        throw new Error('External modification was overwritten');
+      }
+    } finally {
+      window.__TAURI_INTERNALS__ = previous;
+    }
+  });
+
+  // 実際の編集画面で新規作成→初回保存→編集→再保存を検証する。
+  // Tauriコマンドのみモックし、ボタン・ノード・接続線は実画面で操作する。
+  const nativePage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  await nativePage.addInitScript(() => {
+    const files = new Map();
+    const calls = [];
+    window.__nativeSaveTest = { files, calls };
+    // @tauri-apps/api/core の isTauri() は globalThis.isTauri を参照する。
+    // invokeだけをモックしてもフォルダ選択ボタンがdisabledになる。
+    window.isTauri = true;
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'E2E test folder';
+        if (command === 'list_scenario_files') return [];
+        if (command === 'create_scenario_file') {
+          if (files.has(args.relativePath)) throw new Error('既存ファイル');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        throw new Error('Unexpected native command: ' + command);
+      },
+    };
+  });
+  try {
+    await nativePage.goto('http://127.0.0.1:4179/');
+    await nativePage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await nativePage.getByRole('button', { name: /新規/ }).first().click();
+    await nativePage.getByRole('heading', { name: '新規フロー作成' }).waitFor();
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    const actors = nativePage.locator('[data-actor-id]');
+    if (await actors.count() !== 2) throw new Error('Native editor did not create two nodes');
+    // 新規ノードは同じキャンバス中心に生成されるため、接続前に2件目を移動する。
+    await nativePage.getByLabel('X', { exact: true }).fill('300');
+    const handle = nativePage.locator('[data-connection-handle]').first();
+    const source = await handle.boundingBox();
+    const destination = await actors.last().locator('rect').first().boundingBox();
+    if (!source || !destination) throw new Error('Connection handles are not visible');
+    await nativePage.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+    await nativePage.mouse.down();
+    await nativePage.mouse.move(destination.x + destination.width / 2, destination.y + destination.height / 2, { steps: 12 });
+    await nativePage.mouse.up();
+    await nativePage.getByText('通信線を追加しました。').waitFor();
+    await nativePage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await nativePage.getByText('選択したフォルダに新しいYAMLを作成しました。').waitFor();
+    // 保存後にノードを追加してから再保存し、初回の原文が渡されることを確認する。
+    await nativePage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await nativePage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await nativePage.getByText('選択したフォルダのYAMLを上書き保存しました。').waitFor();
+    const saved = await nativePage.evaluate(() => {
+      const { files, calls } = window.__nativeSaveTest;
+      return { calls, content: files.get(calls[0]?.relativePath) };
+    });
+    if (saved.calls.length !== 2 ||
+        saved.calls[0].command !== 'create_scenario_file' ||
+        saved.calls[1].command !== 'write_scenario_file' ||
+        saved.calls[1].relativePath !== saved.calls[0].relativePath ||
+        saved.calls[1].expectedContent !== saved.calls[0].content ||
+        saved.content !== saved.calls[1].content ||
+        parse(saved.content).actors.length !== 3) {
+      throw new Error('Native editor did not update the newly created YAML with its original revision');
+    }
+  } finally {
+    await nativePage.close();
+  }
+  // 空の既存YAMLは新規作成ではなく既存編集として開き、原文付きで上書きする。
+  const emptyPage = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const originalEmpty = stringify({
+    schemaVersion: '1.0',
+    metadata: { id: 'empty-existing', title: '空の既存フロー', description: '', category: 'custom' },
+    actors: [],
+    steps: [],
+  });
+  await emptyPage.addInitScript(content => {
+    const files = new Map([['empty-existing.yaml', content]]);
+    const calls = [];
+    window.__emptyExistingTest = { files, calls };
+    // @tauri-apps/api/core の isTauri() は globalThis.isTauri を参照する。
+    // invokeだけをモックしてもフォルダ選択ボタンがdisabledになる。
+    window.isTauri = true;
+    window.__TAURI_INTERNALS__ = {
+      invoke: async (command, args = {}) => {
+        if (command === 'select_scenario_folder') return 'E2E existing folder';
+        if (command === 'list_scenario_files') return [...files.keys()];
+        if (command === 'read_scenario_file') return files.get(args.relativePath);
+        if (command === 'write_scenario_file') {
+          if (files.get(args.relativePath) !== args.expectedContent) throw new Error('保存競合');
+          files.set(args.relativePath, args.content);
+          calls.push({ command, ...args });
+          return;
+        }
+        if (command === 'create_scenario_file') throw new Error('既存YAMLを新規作成してはいけません');
+        throw new Error('Unexpected native command: ' + command);
+      },
+    };
+  }, originalEmpty);
+  try {
+    await emptyPage.goto('http://127.0.0.1:4179/');
+    await emptyPage.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).click();
+    await emptyPage.getByRole('button', { name: '✎ フローを編集' }).waitFor();
+    await emptyPage.getByRole('button', { name: '✎ フローを編集' }).click();
+    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor();
+    // WIN-23: 空シナリオの保存拒否と元ファイル保持。
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('保存にはノード2件以上と通信1件以上が必要です。', { exact: true }).waitFor();
+    const assertNoWrite = async () => {
+      const result = await emptyPage.evaluate(() => ({
+        content: window.__emptyExistingTest.files.get('empty-existing.yaml'),
+        calls: window.__emptyExistingTest.calls.length,
+      }));
+      if (result.content !== originalEmpty || result.calls !== 0) throw new Error('WIN-23: invalid save changed original YAML');
+    };
+    await assertNoWrite();
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByLabel('X', { exact: true }).fill('300');
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('保存にはノード2件以上と通信1件以上が必要です。', { exact: true }).waitFor();
+    await assertNoWrite();
+    if (await emptyPage.locator('[data-actor-id]').count() !== 2) throw new Error('WIN-23: rejected save discarded nodes');
+    console.log('PASS: WIN-23 empty/no-step save rejected');
+    const emptyActors = emptyPage.locator('[data-actor-id]');
+    const emptyHandle = await emptyPage.locator('[data-connection-handle]').first().boundingBox();
+    const emptyDestination = await emptyActors.last().locator('rect').first().boundingBox();
+    if (!emptyHandle || !emptyDestination) throw new Error('Existing scenario connection handles are missing');
+    await emptyPage.mouse.move(emptyHandle.x + emptyHandle.width / 2, emptyHandle.y + emptyHandle.height / 2);
+    await emptyPage.mouse.down();
+    await emptyPage.mouse.move(emptyDestination.x + emptyDestination.width / 2, emptyDestination.y + emptyDestination.height / 2, { steps: 12 });
+    await emptyPage.mouse.up();
+    await emptyPage.getByText('通信線を追加しました。').waitFor();
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText('選択したフォルダのYAMLを上書き保存しました。').waitFor();
+    const result = await emptyPage.evaluate(() => {
+      const { files, calls } = window.__emptyExistingTest;
+      return { calls, content: files.get('empty-existing.yaml') };
+    });
+    if (result.calls.length !== 1 || result.calls[0].command !== 'write_scenario_file' ||
+        result.calls[0].expectedContent !== originalEmpty || parse(result.content).actors.length !== 2 ||
+        parse(result.content).steps.length !== 1) {
+      throw new Error('Existing empty YAML was not updated with its original content');
+    }
+    // 編集開始後の外部更新を模擬し、競合時に内容と比較基準が上書きされないことを検証する。
+    const externalRevision = result.content + '# externally updated\\n';
+    await emptyPage.evaluate(content => {
+      window.__emptyExistingTest.files.set('empty-existing.yaml', content);
+    }, externalRevision);
+    await emptyPage.getByRole('button', { name: '＋ ノード追加' }).click();
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
+    // 失敗後の再試行も古い比較基準を使い、外部変更を上書きしてはいけない。
+    await emptyPage.getByRole('button', { name: 'YAMLを保存…' }).click();
+    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
+    const conflict = await emptyPage.evaluate(() => {
+      const { files, calls } = window.__emptyExistingTest;
+      return { content: files.get('empty-existing.yaml'), calls };
+    });
+    if (conflict.content !== externalRevision || conflict.calls.length !== 1) {
+      throw new Error('Save conflict overwrote external YAML or incorrectly advanced the saved revision');
+    }
+    // 保存競合のまま画面を離れようとしても、未保存の変更を維持する。
+    await emptyPage.getByRole('button', { name: '再生画面へ戻る' }).click();
+    const exitDialog = emptyPage.getByRole('dialog', { name: '未保存の変更があります' });
+    await exitDialog.waitFor();
+    await exitDialog.getByRole('button', { name: '保存して戻る' }).click();
+    await emptyPage.getByText(/保存できませんでした:.*保存競合/).waitFor();
+    await exitDialog.waitFor();
+    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor();
+    if (await emptyPage.locator('[data-actor-id]').count() !== 3) {
+      throw new Error('Conflict save-and-exit discarded unsaved nodes');
+    }
+    await exitDialog.getByRole('button', { name: '編集を続ける' }).click();
+    await exitDialog.waitFor({ state: 'hidden' });
+    const preserved = await emptyPage.evaluate(() => window.__emptyExistingTest.files.get('empty-existing.yaml'));
+    if (preserved !== externalRevision) throw new Error('Conflict exit flow overwrote external YAML');
+    await emptyPage.getByRole('button', { name: '再生画面へ戻る' }).click();
+    await emptyPage.getByRole('dialog', { name: '未保存の変更があります' }).getByRole('button', { name: '保存せず戻る' }).click();
+    await emptyPage.getByRole('heading', { name: 'フローエディター' }).waitFor({ state: 'hidden' });
+    if (await emptyPage.evaluate(() => window.__emptyExistingTest.files.get('empty-existing.yaml')) !== externalRevision) {
+      throw new Error('Discarding local changes modified externally updated YAML');
+    }
+  } finally {
+    await emptyPage.close();
+  }
+  await page.getByRole('button', { name: /新規/ }).first().click();
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  // Undo/Redo はノード追加を戻し、やり直しで同じノードを復元する。
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Expected one newly created actor');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Ctrl+Z did not undo actor creation');
+  await page.keyboard.press('Control+y');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Ctrl+Y did not redo actor creation');
+  // 新しい編集を行ったらRedo履歴が破棄されること。
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Second actor was not added');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not remove second actor');
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Replacement actor was not added');
+  const actorIdsBeforeRedo = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-actor-id')));
+  await page.keyboard.press('Control+y');
+  const actorIdsAfterRedo = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => element.getAttribute('data-actor-id')));
+  if (JSON.stringify(actorIdsBeforeRedo) !== JSON.stringify(actorIdsAfterRedo)) throw new Error('Redo incorrectly restored a discarded branch');
+  // 後続のドラッグ検証はノード1件の状態で行う。
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not restore single-actor state');
+  // 選択ノードはBackspace/Deleteで削除でき、確認キャンセルとUndoも機能する。
+  const keyboardNode = page.locator('[data-actor-id]').first();
+  await keyboardNode.locator('rect').first().click();
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.keyboard.press('Backspace');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Backspace cancellation deleted the actor');
+  page.once('dialog', dialog => dialog.accept());
+  await page.keyboard.press('Delete');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Delete did not remove selected actor');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 1) throw new Error('Undo did not restore keyboard-deleted actor');
+  const node = page.locator('[data-actor-id]').first();
+  await node.waitFor();
+  for (let i = 0; i < 8; i++) await page.getByRole('button', { name: '−', exact: true }).click();
+  await page.getByText('30%', { exact: true }).waitFor();
+  const svg = page.locator('.editor-canvas svg');
+  const viewport = await svg.boundingBox();
+  if (!viewport) throw new Error('Editor SVG is not visible');
+  const start = await node.locator('rect').first().getAttribute('x');
+  const box = await node.locator('rect').first().boundingBox();
+  if (!box) throw new Error('Node is not visible');
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(viewport.x + viewport.width - 15, viewport.y + viewport.height / 2, { steps: 20 });
+  await delay(450);
+  await page.mouse.up();
+  const end = await node.locator('rect').first().getAttribute('x');
+  if (start === end) throw new Error('Node did not move at 30% zoom');
+  // 複数のpointermoveを伴うドラッグを1回のUndoで元の座標へ戻せること。
+  await page.keyboard.press('Control+z');
+  const undone = await node.locator('rect').first().getAttribute('x');
+  if (undone !== start) throw new Error(`One Ctrl+Z did not undo the entire drag: start=${start}, end=${end}, undone=${undone}`);
+  await page.keyboard.press('Control+y');
+  const redone = await node.locator('rect').first().getAttribute('x');
+  if (redone !== end) throw new Error('Ctrl+Y did not restore the dragged position');
+  // ポインタ操作が中断された場合は、ノード座標とUndo履歴をドラッグ前へ戻す。
+  const cancelStart = await node.locator('rect').first().getAttribute('x');
+  const cancelBox = await node.locator('rect').first().boundingBox();
+  if (!cancelBox) throw new Error('Node is not visible for pointer cancellation test');
+  await page.mouse.move(cancelBox.x + cancelBox.width / 2, cancelBox.y + cancelBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelBox.x + cancelBox.width / 2 + 65, cancelBox.y + cancelBox.height / 2 + 15, { steps: 8 });
+  const cancelMoved = await node.locator('rect').first().getAttribute('x');
+  if (cancelMoved === cancelStart) throw new Error('Cancellation test did not move the actor');
+  await svg.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  const cancelRestored = await node.locator('rect').first().getAttribute('x');
+  if (cancelRestored !== cancelStart) throw new Error(`PointerCancel did not restore actor: before=${cancelStart}, after=${cancelRestored}`);
+  await page.keyboard.press('Control+z');
+  const afterCancelUndo = await node.locator('rect').first().getAttribute('x');
+  if (afterCancelUndo !== start) throw new Error('PointerCancel created an extra Undo history entry');
+  await page.keyboard.press('Control+y');
+  if (await node.locator('rect').first().getAttribute('x') !== cancelStart) throw new Error('Redo failed after PointerCancel');
+  await page.getByRole('button', { name: '表示リセット' }).click();
+  // プレビューへの遷移で編集データを破棄・再初期化しないことを確認する。
+  const beforePreview = await node.locator('rect').first().getAttribute('x');
+  const actorCount = await page.locator('[data-actor-id]').count();
+  await page.getByRole('button', { name: '▶ プレビュー' }).click();
+  await page.getByRole('heading', { name: /プレビュー：/ }).waitFor();
+  await page.getByRole('button', { name: '編集画面に戻る' }).click();
+  await page.getByRole('heading', { name: '新規フロー作成' }).waitFor();
+  const afterPreview = await page.locator('[data-actor-id]').first().locator('rect').first().getAttribute('x');
+  if (beforePreview !== afterPreview) throw new Error('Node coordinates changed after preview round trip');
+  if (await page.locator('[data-actor-id]').count() !== actorCount) throw new Error('Actors changed after preview round trip');
+  // 負座標と正座標に離れたノードの表示リセットは、外接範囲の中心を画面中央に合わせる。
+  await page.locator('[data-actor-id]').first().locator('rect').first().click();
+  await page.getByLabel('X', { exact: true }).fill('-800');
+  await page.getByLabel('Y', { exact: true }).fill('-400');
+  await page.getByRole('button', { name: '＋ ノード追加' }).click();
+  await page.locator('[data-actor-id]').last().locator('rect').first().click();
+  await page.getByLabel('X', { exact: true }).fill('400');
+  await page.getByLabel('Y', { exact: true }).fill('200');
+  await page.getByRole('button', { name: '表示リセット' }).click();
+  const bounds = await page.locator('[data-actor-id]').evaluateAll(elements =>
+    elements.map(element => {
+      const rect = element.querySelector('rect').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    }));
+  const canvas = await svg.boundingBox();
+  if (!canvas || bounds.length !== 2) throw new Error(`Expected two nodes and a visible canvas for negative-coordinate test: nodes=${bounds.length}, canvas=${Boolean(canvas)}`);
+  const midpoint = {
+    x: (Math.min(...bounds.map(item => item.x)) + Math.max(...bounds.map(item => item.x))) / 2,
+    y: (Math.min(...bounds.map(item => item.y)) + Math.max(...bounds.map(item => item.y))) / 2,
+  };
+  if (Math.abs(midpoint.x - (canvas.x + canvas.width / 2)) > 3 ||
+      Math.abs(midpoint.y - (canvas.y + canvas.height / 2)) > 3) {
+    throw new Error('Reset view did not center the negative/positive actor bounds: ' + JSON.stringify({ midpoint, canvas }));
+  }
+  // ウィンドウリサイズ後もSVGのviewBoxと表示サイズを同期し、再センタリングできること。
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.waitForFunction(() => {
+    const svg = document.querySelector('.editor-canvas svg');
+    if (!svg) return false;
+    const rect = svg.getBoundingClientRect();
+    const view = svg.viewBox.baseVal;
+    return Math.abs(view.width - rect.width) < 2 && Math.abs(view.height - rect.height) < 2;
+  });
+  await page.getByRole('button', { name: '表示リセット' }).click();
+  const resizedNodes = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => {
+    const rect = element.querySelector('rect').getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  }));
+  const resizedCanvas = await svg.boundingBox();
+  if (!resizedCanvas) throw new Error('Canvas disappeared after viewport resize');
+  const resizedCenter = {
+    x: (Math.min(...resizedNodes.map(item => item.left)) + Math.max(...resizedNodes.map(item => item.right))) / 2,
+    y: (Math.min(...resizedNodes.map(item => item.top)) + Math.max(...resizedNodes.map(item => item.bottom))) / 2,
+  };
+  if (Math.abs(resizedCenter.x - (resizedCanvas.x + resizedCanvas.width / 2)) > 4 ||
+      Math.abs(resizedCenter.y - (resizedCanvas.y + resizedCanvas.height / 2)) > 4) {
+    throw new Error('Viewport reset failed to center nodes after resize');
+  }
+  // 複数選択したノードのドラッグは1件の履歴として確定し、全ノードを同時に復元する。
+  await page.getByRole('button', { name: '複数ノード選択・移動' }).click();
+  await page.getByRole('button', { name: 'すべて選択' }).click();
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  const multiPositions = () => page.locator('[data-actor-id]').evaluateAll(elements =>
+    elements.map(element => ({ id: element.getAttribute('data-actor-id'), x: element.querySelector('rect').getAttribute('x'), y: element.querySelector('rect').getAttribute('y') })));
+  // WIN-21: Shiftクリックで選択対象を反転し、非選択ノードを動かさない。
+  const firstMultiNode = page.locator('[data-actor-id]').first().locator('rect').first();
+  const secondMultiNode = page.locator('[data-actor-id]').last().locator('rect').first();
+  await secondMultiNode.click({ modifiers: ['Shift'] });
+  await page.getByText('1件選択中', { exact: true }).waitFor();
+  const partialBefore = await multiPositions();
+  const partialBox = await firstMultiNode.boundingBox();
+  if (!partialBox) throw new Error('WIN-21: selected node is not visible');
+  await page.mouse.move(partialBox.x + partialBox.width / 2, partialBox.y + partialBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(partialBox.x + partialBox.width / 2 + 24, partialBox.y + partialBox.height / 2 + 16, { steps: 8 });
+  await page.mouse.up();
+  const partialAfter = await multiPositions();
+  if (JSON.stringify(partialAfter[0]) === JSON.stringify(partialBefore[0]) ||
+      JSON.stringify(partialAfter[1]) !== JSON.stringify(partialBefore[1])) {
+    throw new Error('WIN-21: moving a selected node affected the wrong actors');
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(partialBefore)) {
+    throw new Error('WIN-21: partial selection movement was not restored');
+  }
+  // 空白から矩形をドラッグして一方だけを選択する。
+  const marqueeNode = await firstMultiNode.boundingBox();
+  const marqueeCanvas = await svg.boundingBox();
+  if (!marqueeNode || !marqueeCanvas) throw new Error('WIN-21: marquee target is missing');
+  const startX = marqueeNode.x - 8;
+  const startY = marqueeNode.y - 8;
+  if (startX <= marqueeCanvas.x || startY <= marqueeCanvas.y) throw new Error('WIN-21: no visible blank space for marquee');
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(marqueeNode.x + marqueeNode.width / 2, marqueeNode.y + marqueeNode.height / 2, { steps: 8 });
+  await page.mouse.up();
+  await page.getByText('1件選択中', { exact: true }).waitFor();
+  await secondMultiNode.click({ modifiers: ['Shift'] });
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  console.log('PASS: WIN-21 Shift selection, partial movement and marquee selection');
+  const multiBefore = await multiPositions();
+  const multiBox = await page.locator('[data-actor-id]').first().locator('rect').first().boundingBox();
+  if (!multiBox) throw new Error('First node is not visible for multi drag');
+  await page.mouse.move(multiBox.x + multiBox.width / 2, multiBox.y + multiBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(multiBox.x + multiBox.width / 2 + 48, multiBox.y + multiBox.height / 2 + 32, { steps: 12 });
+  await page.mouse.up();
+  const multiAfter = await multiPositions();
+  if (multiAfter.some((item, index) => item.x === multiBefore[index].x || item.y === multiBefore[index].y)) {
+    throw new Error('Multi drag did not move every selected actor');
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiBefore)) throw new Error('Multi drag was not restored by one Undo');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag was not restored by one Redo');
+  // 複数ノード移動中のキャンセルでも全ノードを復元し、Undo履歴を増やさない。
+  const cancelMultiBox = await page.locator('[data-actor-id]').first().locator('rect').first().boundingBox();
+  if (!cancelMultiBox) throw new Error('First node is not visible for multi cancel');
+  await page.mouse.move(cancelMultiBox.x + cancelMultiBox.width / 2, cancelMultiBox.y + cancelMultiBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelMultiBox.x + cancelMultiBox.width / 2 + 35, cancelMultiBox.y + cancelMultiBox.height / 2 + 20, { steps: 8 });
+  await svg.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag cancellation did not restore all actors');
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiBefore)) throw new Error('Multi drag cancellation created an extra history entry');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await multiPositions()) !== JSON.stringify(multiAfter)) throw new Error('Multi drag redo failed after cancellation');
+  // 複数選択ノードのDeleteは一括削除・一括Undoとなり、確認キャンセルでは変更しない。
+  await page.getByRole('button', { name: 'すべて選択' }).click();
+  await page.getByText('2件選択中', { exact: true }).waitFor();
+  await page.evaluate(() => document.activeElement?.blur());
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.keyboard.press('Backspace');
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Multi-node Backspace cancellation removed actors');
+  page.once('dialog', dialog => dialog.accept());
+  await page.keyboard.press('Delete');
+  if (await page.locator('[data-actor-id]').count() !== 0) throw new Error('Multi-node Delete did not remove all selected actors');
+  await page.keyboard.press('Control+z');
+  if (await page.locator('[data-actor-id]').count() !== 2) throw new Error('Multi-node Delete was not restored by one Undo');
+  await page.getByRole('button', { name: '再生画面へ戻る' }).click();
+  await page.getByRole('dialog', { name: '未保存の変更があります' }).waitFor();
+  await page.getByRole('button', { name: '編集を続ける' }).click();
+  if (await page.getByRole('dialog').count()) throw new Error('Dialog was not dismissed');
+  await page.getByRole('button', { name: '再生画面へ戻る' }).click();
+  await page.getByRole('button', { name: '保存せず戻る' }).click();
+  await page.getByRole('button', { name: /ローカルのシナリオフォルダを開く/ }).waitFor();
+  // 既存YAMLの読み込み直後も、負座標・可変サイズのノード群を中心表示する。
+  let savedScenarioForReload = null;
+  await page.route('**/scenarios/0/order-processing.yaml', async route => {
+    const scenario = savedScenarioForReload ?? parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
+    if (!savedScenarioForReload) {
+      scenario.steps[0].actions[0].durationMs = 900;
+      for (const step of scenario.steps.slice(1)) step.actions[0].durationMs = 100;
+      scenario.steps[0].bidirectional = true;
+      scenario.steps[0].reverseFrom = 'order';
+      scenario.steps[0].reverseTo = 'customer';
+      scenario.steps[0].reversePayload = '注文受付結果';
+      scenario.actors[0].position = { x: -1800, y: -950 };
+      scenario.actors[0].width = 360;
+      scenario.actors[0].height = 220;
+      scenario.actors[1].position = { x: 1200, y: 750 };
+      scenario.actors[1].width = 180;
+      scenario.actors[1].height = 80;
+      scenario.actors[2].position = { x: -500, y: 250 };
+      scenario.actors[3].position = { x: 300, y: -300 };
+    }
+    await route.fulfill({ status: 200, contentType: 'text/yaml', body: stringify(scenario) });
+  });
+  // シナリオ一覧をテスト対象の1件に限定し、選択状態に依存せず読み込む。
+  await page.route('**/scenarios/0/manifest.json', route => route.fulfill({ json: ['/scenarios/0/order-processing.yaml'] }));
+  await page.reload();
+  await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  // WIN-23: 正常なYAMLを対照に、実際の読込処理が不正データを拒否することを確認する。
+  const validYaml = parse(await readFile('public/scenarios/order-processing.yaml', 'utf8'));
+  const invalidScenarios = [
+    ['duplicate-step', scenario => { scenario.steps.push(structuredClone(scenario.steps[0])); }, /step IDが重複/],
+    ['missing-actor', scenario => { scenario.steps[0].actions[0].to = 'missing'; }, /参照先actorが存在しません/],
+    ['waypoint-limit', scenario => { scenario.steps[0].waypoints = Array.from({ length: 101 }, () => ({ x: 0, y: 0 })); }, /waypoints/],
+    ['nonfinite-waypoint', scenario => { scenario.steps[0].reverseWaypoints = [{ x: Infinity, y: 0 }]; }, /reverseWaypoints/],
+  ];
+  for (const [name, corrupt, expectedError] of invalidScenarios) {
+    const scenario = structuredClone(validYaml);
+    corrupt(scenario);
+    const url = '/scenarios/0/' + name + '.yaml';
+    await page.route('**' + url, route => route.fulfill({ contentType: 'text/yaml', body: stringify(scenario) }));
+    const error = await page.evaluate(async path => {
+      const { loadScenario } = await import('/src/scenario.ts');
+      try {
+        await loadScenario(path);
+        return '';
+      } catch (error) {
+        return String(error);
+      }
+    }, url);
+    if (!expectedError.test(error)) throw new Error('WIN-23: ' + name + ': ' + error);
+  }
+
+  // WIN-04/24: 最小ウィンドウ相当の表示領域でも再生操作とステップ移動ができる。
+  await page.setViewportSize({ width: 900, height: 600 });
+  const play = page.getByRole('button', { name: '▶ 再生', exact: true });
+  const pause = page.getByRole('button', { name: /一時停止/ });
+  const previous = page.getByRole('button', { name: /前へ/ });
+  const next = page.getByRole('button', { name: /次へ/ });
+  await page.getByRole('button', { name: '0.5x', exact: true }).click();
+  await page.getByRole('button', { name: '0.5x', exact: true, pressed: true }).waitFor();
+  await play.click();
+  await pause.click();
+  await play.waitFor();
+  await page.getByText('STEP 1 / 5', { exact: true }).waitFor();
+  await next.click();
+  await page.getByText('STEP 2 / 5', { exact: true }).waitFor();
+  await previous.click();
+  await page.getByText('STEP 1 / 5', { exact: true }).waitFor();
+  await page.getByRole('button', { name: '2x', exact: true }).click();
+  await page.getByRole('button', { name: '2x', exact: true, pressed: true }).waitFor();
+  await play.click();
+  await page.getByRole('button', { name: /最初から再生/ }).waitFor({ timeout: 10000 });
+  await page.getByText('STEP 5 / 5', { exact: true }).waitFor();
+  if (await next.isEnabled()) throw new Error('WIN-04: Next remains enabled after the final step');
+  console.log('PASS: WIN-04 playback controls and final step');
+  await page.getByRole('button', { name: '↺', exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  await page.getByRole('button', { name: /フローを編集/ }).click();
+  await page.locator('[data-actor-id]').first().waitFor();
+  const loadedNodes = await page.locator('[data-actor-id]').evaluateAll(elements => elements.map(element => {
+    const rect = element.querySelector('rect').getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  }));
+  const loadedCanvas = await page.locator('.editor-canvas svg').boundingBox();
+  if (!loadedCanvas || loadedNodes.length !== 4) throw new Error('Existing YAML did not load four nodes');
+  const loadedCenter = {
+    x: (Math.min(...loadedNodes.map(node => node.left)) + Math.max(...loadedNodes.map(node => node.right))) / 2,
+    y: (Math.min(...loadedNodes.map(node => node.top)) + Math.max(...loadedNodes.map(node => node.bottom))) / 2,
+  };
+  if (Math.abs(loadedCenter.x - (loadedCanvas.x + loadedCanvas.width / 2)) > 4 ||
+      Math.abs(loadedCenter.y - (loadedCanvas.y + loadedCanvas.height / 2)) > 4) {
+    throw new Error('Initial YAML view is not centered on variable-size negative-coordinate nodes: ' + JSON.stringify({ loadedCenter, loadedCanvas }));
+  }
+
+  // 双方向通信のUI編集をUndo/Redoで戻せること。往復線は1件の通信として管理する。
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  const direction = page.getByLabel('接続方向');
+  const selectCommunication = () => page.getByRole('button', { name: '1. 注文受付' }).click();
+  await direction.selectOption('one');
+  if (await page.getByLabel('復路通信内容').count() !== 0) {
+    throw new Error('Reverse communication settings remained visible in one-way mode');
+  }
+  await page.keyboard.press('Control+z');
+  await selectCommunication();
+  if (await direction.inputValue() !== 'both') throw new Error('Undo did not restore bidirectional mode');
+  await page.keyboard.press('Control+y');
+  await selectCommunication();
+  if (await direction.inputValue() !== 'one') throw new Error('Redo did not restore one-way mode');
+  await page.keyboard.press('Control+z');
+  await selectCommunication();
+  if (await direction.inputValue() !== 'both') throw new Error('Second Undo did not restore bidirectional mode');
+  // 復路内容のフォーム編集はYAML保存にも反映される。元の値に戻して後続の再読込テストへ渡す。
+  const reversePayload = page.getByLabel('復路通信内容');
+  await reversePayload.fill('編集後の応答');
+  if (await reversePayload.inputValue() !== '編集後の応答') throw new Error('Reverse payload editing failed');
+  await reversePayload.fill('注文受付結果');
+  if (await reversePayload.inputValue() !== '注文受付結果') throw new Error('Reverse payload was not restored for YAML save');
+
+  // 再生順の入れ替えは通信IDを保持したままUndo/Redoでき、保存時も順序が維持される。
+  const playbackRows = page.locator('.editor-step-list > div');
+  const playbackTitles = async () => playbackRows.locator('button.selected, button:not([aria-label])').allTextContents();
+  const originalOrder = await playbackTitles();
+  if (originalOrder.length !== 5 || !originalOrder[0].includes('注文受付') || !originalOrder[1].includes('在庫照会')) {
+    throw new Error('Unexpected playback order before reordering: ' + JSON.stringify(originalOrder));
+  }
+  await playbackRows.nth(1).getByRole('button', { name: '上へ' }).click();
+  const reordered = await playbackTitles();
+  if (!reordered[0].includes('在庫照会') || !reordered[1].includes('注文受付')) {
+    throw new Error('Playback order did not move the second step up: ' + JSON.stringify(reordered));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Undo did not restore playback order');
+  await page.keyboard.press('Control+y');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(reordered)) throw new Error('Redo did not restore reordered playback steps');
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) throw new Error('Playback order was not restored before YAML save');
+
+  // 右側の通信再生順一覧: Pointer Eventsで上下双方にドラッグでき、Undo/Redoも成立する。
+  const dragPlaybackRow = async (fromIndex, toIndex) => {
+    const handle = playbackRows.nth(fromIndex).locator('.editor-step-drag-handle');
+    const destination = playbackRows.nth(toIndex);
+    await handle.scrollIntoViewIfNeeded();
+    await destination.scrollIntoViewIfNeeded();
+    const from = await handle.boundingBox();
+    const to = await destination.boundingBox();
+    if (!from || !to) throw new Error('Playback order drag handles are not visible');
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
+    await page.mouse.up();
+  };
+  await dragPlaybackRow(0, 2);
+  const draggedDown = await playbackTitles();
+  if (!draggedDown[0].includes('在庫照会') || !draggedDown[2].includes('注文受付')) {
+    throw new Error('Pointer drag did not move the first playback step down: ' + JSON.stringify(draggedDown));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore playback order after pointer drag');
+  }
+  await dragPlaybackRow(2, 0);
+  const draggedUp = await playbackTitles();
+  if (!draggedUp[0].includes('在庫回答')) {
+    throw new Error('Pointer drag did not move the third playback step up: ' + JSON.stringify(draggedUp));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore playback order after upward pointer drag');
+  }
+
+  // ドラッグ途中でキャンセルした場合、並び順は変更されない。
+  const cancelledHandle = playbackRows.nth(0).locator('.editor-step-drag-handle');
+  const cancelledStart = await cancelledHandle.boundingBox();
+  const cancelledDestination = await playbackRows.nth(1).boundingBox();
+  if (!cancelledStart || !cancelledDestination) throw new Error('Playback order cancellation rows are not visible');
+  await page.mouse.move(cancelledStart.x + cancelledStart.width / 2, cancelledStart.y + cancelledStart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelledDestination.x + cancelledDestination.width / 2, cancelledDestination.y + cancelledDestination.height / 2, { steps: 5 });
+  await cancelledHandle.dispatchEvent('pointercancel', { pointerId: 1, bubbles: true });
+  await page.mouse.up();
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Cancelled playback order drag unexpectedly changed order');
+  }
+  // Escapeでもドラッグを中断でき、マウスボタンを離しても順序が変わらない。
+  await page.mouse.move(cancelledStart.x + cancelledStart.width / 2, cancelledStart.y + cancelledStart.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(cancelledDestination.x + cancelledDestination.width / 2, cancelledDestination.y + cancelledDestination.height / 2, { steps: 5 });
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Escape cancelled playback order drag unexpectedly changed order');
+  }
+  // キーボード操作も同じ並べ替え経路を通り、Undoで元に戻せる。
+  await playbackRows.nth(1).locator('.editor-step-drag-handle').focus();
+  await page.keyboard.press('ArrowUp');
+  const keyboardReordered = await playbackTitles();
+  if (!keyboardReordered[0].includes('在庫照会')) {
+    throw new Error('Keyboard playback order move failed: ' + JSON.stringify(keyboardReordered));
+  }
+  await page.keyboard.press('Control+z');
+  if (JSON.stringify(await playbackTitles()) !== JSON.stringify(originalOrder)) {
+    throw new Error('Undo did not restore keyboard playback order move');
+  }
+
+  // 往路・復路の経由点を独立して追加・解除し、Undo/Redoでも相手側を保持する。
+  const receiveEdge = page.locator('.editor-edge[data-step-id="receive"]');
+  const openReceiveMenu = async () => {
+    // SVGパスの外接矩形中心は実際の線上とは限らないため、対象要素へ直接contextmenuを発火する。
+    await receiveEdge.locator('path').first().dispatchEvent('contextmenu', { bubbles: true, clientX: 450, clientY: 300, button: 2 });
+    await page.getByRole('menuitem', { name: '往路の経由点を追加' }).waitFor();
+  };
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '往路の経由点を追加' }).dispatchEvent('click');
+  await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').waitFor();
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '復路の経由点を追加' }).dispatchEvent('click');
+  await receiveEdge.locator('[data-waypoint-direction="reverse"]').waitFor();
+  // WIN-14: 表示経路は手動経由点の中心を通り、全線分が直交する。
+  await receiveEdge.evaluate(edge => {
+    const paths = [...edge.querySelectorAll('path')].filter(path => path.getAttribute('stroke') !== 'transparent');
+    for (const [index, selector] of ['[data-waypoint-index]:not([data-waypoint-direction])', '[data-waypoint-direction="reverse"]'].entries()) {
+      const path = paths[index];
+      const points = [...path.getAttribute('d').matchAll(/[ML]([^ ]+) ([^ ]+)/g)].map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+      if (points.length < 2 || points.slice(1).some((point, i) => point.x !== points[i].x && point.y !== points[i].y)) {
+        throw new Error('WIN-14: non-orthogonal manual route');
+      }
+      for (const handle of edge.querySelectorAll(selector)) {
+        const x = Number(handle.getAttribute('cx'));
+        const y = Number(handle.getAttribute('cy'));
+        if (!points.some(point => point.x === x && point.y === y)) throw new Error('WIN-14: route misses waypoint center');
+      }
+    }
+  });
+  console.log('PASS: WIN-14 manual route passes waypoint centers');
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Undo of reverse waypoint changed forward waypoints');
+  }
+  await page.keyboard.press('Control+y');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Redo did not restore reverse waypoint');
+  }
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '往路の経由点を解除' }).dispatchEvent('click');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Removing forward waypoints also removed reverse waypoints');
+  }
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Undo did not restore forward waypoint');
+  }
+  await openReceiveMenu();
+  await page.getByRole('menuitem', { name: '復路の経由点を解除' }).dispatchEvent('click');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
+      await receiveEdge.locator('[data-waypoint-index]:not([data-waypoint-direction])').count() !== 1) {
+    throw new Error('Removing reverse waypoints also removed forward waypoints');
+  }
+  await page.keyboard.press('Control+z');
+  await page.getByRole('button', { name: '1. 注文受付' }).click();
+  if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 1) {
+    throw new Error('Undo did not restore reverse waypoint after removal');
+  }
+
+  // WIN-17: 編集UIでIF定義と項目を追加し、往路に関連付ける。
+  await page.getByRole('button', { name: '＋ IF定義', exact: true }).click();
+  const interfaceEditor = page.getByRole('dialog', { name: 'IF定義の編集' });
+  await interfaceEditor.getByLabel('名称').fill('注文受付API');
+  await interfaceEditor.getByRole('button', { name: '＋ 項目追加' }).click();
+  await interfaceEditor.locator('label[aria-label="項目名"] input').fill('orderId');
+  await interfaceEditor.getByRole('checkbox', { name: '必須' }).check();
+  await interfaceEditor.getByRole('button', { name: 'IF定義画面を閉じる' }).click();
+  await page.getByRole('button', { name: '1. 注文受付', exact: true }).click();
+  await page.getByLabel('往路IF定義').selectOption({ label: '注文受付API' });
+
+  // WIN-26: 後続2件の変更順を保存し、再読込後の再生画面で確認する。
+  await playbackRows.nth(2).getByRole('button', { name: '上へ' }).click();
+  // Web保存の回帰確認: 既存シナリオの編集結果がYAMLとしてダウンロードされる。
+  // 保存したファイルを再パースし、ノード配置の負座標が欠落しないことを検証する。
+  // ChromiumではFile System Access APIが優先されるため、ダウンロード分岐を明示的に検証する。
+  await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'YAMLを保存…' }).click(),
+  ]);
+  if (!/\.ya?ml$/i.test(download.suggestedFilename())) {
+    throw new Error('Downloaded scenario does not have a YAML filename: ' + download.suggestedFilename());
+  }
+  const downloadedPath = await download.path();
+  if (!downloadedPath) throw new Error('Downloaded YAML file is not available');
+  const downloadedScenario = parse(await readFile(downloadedPath, 'utf8'));
+  if (!Array.isArray(downloadedScenario.actors) || downloadedScenario.actors.length !== 4) {
+    throw new Error('Downloaded YAML lost the existing scenario actors');
+  }
+  if (downloadedScenario.actors[0].position.x !== -1800 ||
+      downloadedScenario.actors[0].position.y !== -950) {
+    throw new Error('Downloaded YAML did not preserve negative actor coordinates');
+  }
+  await page.getByText('YAMLをダウンロードしました。', { exact: false }).waitFor();
+  if (downloadedScenario.steps.map(step => step.id).join(',') !== 'receive,stock-result,stock,pay,done') {
+    throw new Error('YAML save lost the reordered steps');
+  }
+  const bidirectionalStep = downloadedScenario.steps.find(step => step.id === 'receive');
+  if (!bidirectionalStep || bidirectionalStep.bidirectional !== true ||
+      bidirectionalStep.reverseFrom !== 'order' ||
+      bidirectionalStep.reverseTo !== 'customer' ||
+      bidirectionalStep.reversePayload !== '注文受付結果' ||
+      bidirectionalStep.actions[0].from !== 'customer' ||
+      bidirectionalStep.actions[0].to !== 'order') {
+    throw new Error('Downloaded YAML lost bidirectional forward/reverse communication settings');
+  }
+  if (bidirectionalStep.waypoints?.length !== 1 || bidirectionalStep.reverseWaypoints?.length !== 1) {
+    throw new Error('YAML save lost independent forward/reverse waypoints');
+  }
+  // 保存したYAMLを次の読込データとして使用し、エディターで再保存しても往復設定が保持されること。
+  savedScenarioForReload = downloadedScenario;
+  await page.reload();
+  await page.getByRole('heading', { name: 'ECサイトの注文処理' }).waitFor();
+  const reloadedTitles = await page.locator('.steps button').allTextContents();
+  if (reloadedTitles.join() !== downloadedScenario.steps.map((step, index) => (index + 1) + '. ' + step.title).join()) {
+    throw new Error('WIN-26: playback order differs from the saved YAML');
+  }
+  console.log('PASS: WIN-26 saved playback order after reload');
+  // WIN-17: 保存したYAMLを再読込し、往路リンクから定義と項目を開けることを確認する。
+  await page.getByRole('button', { name: '往路IF: 注文受付API' }).click();
+  const definition = page.getByRole('dialog', { name: 'IF定義' });
+  await definition.getByRole('heading', { name: '注文受付API' }).waitFor();
+  await definition.getByText(/orderId.*string.*必須/).waitFor();
+  await definition.getByRole('button', { name: 'IF定義を閉じる' }).click();
+  await definition.waitFor({ state: 'hidden' });
+  console.log('PASS: WIN-17 interface definition saved, reloaded and opened');
+
+  await page.getByRole('button', { name: /フローを編集/ }).click();
+  await page.locator('[data-actor-id]').first().waitFor();
+  await page.evaluate(() => Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true }));
+  const [roundTripDownload] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'YAMLを保存…' }).click(),
+  ]);
+  const roundTripPath = await roundTripDownload.path();
+  if (!roundTripPath) throw new Error('Re-saved YAML download is missing');
+  const roundTripScenario = parse(await readFile(roundTripPath, 'utf8'));
+  const roundTripStep = roundTripScenario.steps.find(step => step.id === 'receive');
+  if (!roundTripStep || roundTripStep.bidirectional !== true ||
+      roundTripStep.reverseFrom !== 'order' ||
+      roundTripStep.reverseTo !== 'customer' ||
+      roundTripStep.reversePayload !== '注文受付結果' ||
+      JSON.stringify(roundTripStep.waypoints) !== JSON.stringify(bidirectionalStep.waypoints) ||
+      JSON.stringify(roundTripStep.reverseWaypoints) !== JSON.stringify(bidirectionalStep.reverseWaypoints)) {
+    throw new Error('Bidirectional communication settings changed after YAML reload and save');
+  }
+
+
+  if (errors.length) throw new Error('Browser errors: ' + errors.join(' | '));
+  console.log('PASS: single/multi-node Backspace/Delete cancel, delete and Undo, undo/redo, redo branch invalidation, atomic drag undo, pointer cancellation rollback, multi drag atomic undo/redo and cancellation, viewport resize, 30% drag, viewport fit, negative-coordinate centering, existing YAML initial centering, bidirectional UI undo/redo, playback order undo/redo and YAML order, browser YAML download and bidirectional communication reload round trip, preview round trip, unsaved changes, discard navigation');
+} finally {
+  if (browser) await browser.close();
+  if (server.pid) {
+    if (process.platform === 'win32') {
+      const killer = spawn('taskkill', ['/pid', String(server.pid), '/t', '/f'], { stdio: 'ignore' });
+      await new Promise(resolve => { killer.once('close', resolve); killer.once('error', resolve); });
+    } else {
+      server.kill('SIGTERM');
+    }
+  }
+  server.stdout?.destroy();
+  server.stderr?.destroy();
+}

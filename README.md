@@ -1,57 +1,67 @@
-# Business Flow Explorer — Tauri版
+# Business Flow Explorer
 
-[Web版](https://github.com/Renasan-h/business-flow-explorer)をTauri 2でWindowsデスクトップアプリとして起動するための独立したリポジトリです。
+**Business Flow Explorer** は、業務フローやシステム間の通信を視覚的に設計・編集・再生できるWindowsデスクトップアプリケーションです。
 
-## 構成
+Webシステムのリクエスト処理、API連携、データベースアクセス、外部システムとの連携などを、ノードと通信線で表現できます。フローの定義はYAML形式で管理します。
 
-- `web/`：Web版の作業コピー（`npm run setup:web` で初回取得、Git管理対象外）
-- `src-tauri/`：Tauri 2 / Rustアプリ
-- `.github/workflows/ci.yml`：Windowsインストーラー・Portable ZIPのビルド検証
+## 画面イメージ
 
-Web版のソースはこのリポジトリへ複製して管理せず、セットアップ時にGitHubから取得します。既存の`web/`は自動更新しません。Web版を更新する場合は、変更を退避したうえで`web/`内で明示的に`git pull`してください。
+以下はWeb版で撮影された参考画面です。Tauri版は同じフロー表示・編集機能をベースにしていますが、ウィンドウや操作UIには差異が生じる場合があります。
 
-## 開発環境
+### Technicalモード
 
-Windows 11、Node.js 22、Rust stable、Microsoft C++ Build Tools（Desktop development with C++）、WebView2を使用します。
+![Technicalモードでフローを表示した画面（Web版参考）](docs/images/technical.png)
 
-```powershell
-git clone https://github.com/Renasan-h/business-flow-explorer-tauri.git
-cd business-flow-explorer-tauri
-npm install
-npm run setup:web
-npm run dev
-```
+### Illustrationモード
 
-## Windowsインストーラー作成
+![Illustrationモードでフローを表示した画面（Web版参考）](docs/images/illustration.png)
 
-```powershell
-npm run build
-```
+### フローエディター
 
-成果物は`src-tauri/target/release/bundle/nsis/`に生成されます。GitHub Actionsの`Tauri Windows CI`からもArtifactを取得できます。
+![ノードと通信線を編集する画面（Web版参考）](docs/images/editor.png)
 
-## Portable ZIP（インストール不要版）
+### 編集内容のプレビュー
 
-GitHub Actions の `Tauri Windows CI` では、インストーラーに加えて `business-flow-explorer-portable-windows-x64` のArtifactが生成されます。Artifactをダウンロードして解凍すると `BusinessFlowExplorer-portable-windows-x64.zip` があり、そのZIP内に `Business Flow Explorer.exe` が格納されています。
+![編集中のフローを再生して確認する画面（Web版参考）](docs/images/preview.png)
 
-1. GitHub Actionsの成功した実行のArtifactsから `business-flow-explorer-portable-windows-x64` を取得します。
-2. ダウンロードしたArtifact ZIPを解凍します。
-3. 内側の `BusinessFlowExplorer-portable-windows-x64.zip` を解凍します。
-4. `Business Flow Explorer.exe` を実行します。
+## 主な機能
 
-Portable ZIPはインストーラーを必要としませんが、Windows側のWebView2 RuntimeなどTauriに必要な実行環境が必要です。USB等のフォルダーに展開して実行する用途を想定しています。アプリ設定・ユーザーデータを実行ファイルと同じディレクトリに保存する「完全ポータブル」仕様は、現時点では保証していません。
+### フローの作成・編集
 
-## CI成功時の生成物
+- ノード、通信線、領域（グループ）の追加・編集
+- ノードの複数選択、移動、サイズ・表示色の変更
+- 片方向・双方向の通信線、折れ線と経由点の設定
+- 通信順序の並べ替え
+- 拡大・縮小、表示リセット、Undo / Redo
+- ノードの説明、接続先、関連資料などの情報管理
 
-| Artifact名 | 内容 |
-| --- | --- |
-| `business-flow-explorer-windows` | NSIS形式のWindowsインストーラー |
-| `business-flow-explorer-portable-windows-x64` | 実行ファイルを含むPortable ZIP |
+### フローの再生
 
-GitHub ActionsのArtifactは配布用Releaseの添付ファイルとは異なります。正式リリース時は必要に応じて個別にアップロードしてください。
+- 定義した通信順序に沿ったフローの再生
+- 再生・一時停止・速度切り替え
+- 条件分岐に応じた経路の表示
+- ノード情報やインターフェース（IF）定義の参照
 
-## 開発方針と現状
+### シナリオ管理
 
-初期段階ではWeb版の既存画面をTauriウィンドウ内で起動することを優先しています。ローカルの任意フォルダ参照、ファイルの直接上書き保存、設定永続化などのデスクトップ専用機能は**未実装**です。Web版のブラウザ制約がそのまま残る操作もあります。
+- YAMLファイルによるフローの保存・読み込み
+- サブシナリオや共通ノード定義の参照
+- テンプレートを利用したフロー作成
+- ローカルフォルダ内のシナリオ管理
+- 保存時の外部変更検知による意図しない上書きの防止
 
-今後はTauriのファイルダイアログ・ファイルシステム権限を最小限に設定し、Web版とデスクトップ版の保存処理を分離します。Web版のリポジトリは変更しません。
+## 活用例
+
+- **Webアプリケーション**：ブラウザ、Webサーバー、API、データベース間の処理を可視化
+- **業務プロセス**：申請・承認・通知などの処理順序を整理
+- **外部システム連携**：APIやファイル連携の送受信を表現
+- **設計資料**：ノードや通信に説明・IF定義を紐づけ、システム構成を共有
+
+## 使い方
+
+1. 同梱シナリオを選択するか、ローカルのシナリオフォルダを開きます。
+2. フローを編集し、ノードと通信線を配置します。
+3. 通信内容や再生順序、必要に応じて分岐を設定します。
+4. プレビューで処理の流れを確認し、YAMLとして保存します。
+
+操作方法の詳細は[操作ガイド](docs/user-guide.md)をご覧ください。
