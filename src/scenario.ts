@@ -114,7 +114,7 @@ function mergeActor(existing: Actor, incoming: Actor): Actor {
 }
 
 /** YAMLのファイル参照を再帰的に展開し、ancestorsで循環参照を検知する。 */
-async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: string): Promise<{
+async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: string, recovery?: { errors: string[]; unsafe: boolean }): Promise<{
  actors: Actor[];
  steps: Step[];
  root?: ScenarioData;
@@ -166,7 +166,7 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  // 共通Actorファイルにはステップを含めない。
  for (const actorFile of data.actorFiles ?? []) {
   const resolved = new URL(actorFile, url);
-  const fragment = await readFragments(resolved.href, nextAncestors, expectedRoot);
+  const fragment = await readFragments(resolved.href, nextAncestors, expectedRoot, recovery);
   if (fragment.root || fragment.steps.length > 0) {
    throw new Error('actorFilesにはactorsのみを定義してください: ' + actorFile);
   }
@@ -175,7 +175,7 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  // actors配列に記述された順番でActor定義と外部ファイルを展開する。
  for (const entry of data.actors ?? []) {
   if ('file' in entry) {
-   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot);
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
    if (fragment.root || fragment.steps.length > 0) {
     throw new Error('actors内のfileにはActor定義のみを指定してください: ' + entry.file);
    }
@@ -187,10 +187,16 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  // stepsの配列順に通常ステップとサブシナリオを展開する。
  for (const entry of data.steps ?? []) {
   if ('file' in entry) {
-   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot);
+   const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
    // steps内のfile参照はstepsだけを持つ断片YAMLも許可する。
    // 親シナリオのschemaVersionとmetadataはloadScenarioで検証する。
-   if (fragment.root) throw new Error('steps内のfileには親シナリオを指定できません: ' + entry.file);
+   if (fragment.root) {
+    const message = 'steps内のfileには親シナリオを指定できません: ' + entry.file;
+    if (!recovery) throw new Error(message);
+    recovery.errors.push(message);
+    // 親の領域・IF定義は断片展開では保持できないため、上書きを禁止する。
+    if (fragment.root.groups?.length || fragment.root.interfaces?.length) recovery.unsafe = true;
+   }
    fragment.actors.forEach(addActor);
    // ファイル境界の通信を明示した場合は、通常ステップとして挿入する。
    if (entry.handoff) {
@@ -218,8 +224,8 @@ export async function loadTemplateFragment(path: string): Promise<{ actors: Acto
 }
 
 /** YAMLの検証・参照展開・ノード配置を行い、描画用のScenarioを返す。 */
-export async function loadScenario(path: string): Promise<Scenario> {
- const result = await readFragments(path, new Set());
+export async function loadScenario(path: string, recovery?: { errors: string[]; unsafe: boolean }): Promise<Scenario> {
+ const result = await readFragments(path, new Set(), undefined, recovery);
  if (!result.root) throw new Error('親シナリオにはschemaVersionとmetadataが必要です');
  // ローカルの編集中ドラフトは空でも読み込める。再生用の同梱シナリオは従来どおり検証する。
  const isNativeDraft = path.startsWith('/scenarios/native/');
@@ -245,7 +251,9 @@ export async function loadScenario(path: string): Promise<Scenario> {
   stepIds.add(item.id);
   for (const transfer of item.actions) {
    if (!ids.has(transfer.from) || !ids.has(transfer.to)) {
-    throw new Error(`step "${item.id}" の参照先actorが存在しません: ${transfer.from} → ${transfer.to}`);
+    const message = `step "${item.id}" の参照先actorが存在しません: ${transfer.from} → ${transfer.to}`;
+    if (!recovery) throw new Error(message);
+    recovery.errors.push(message);
    }
   }
  }
@@ -286,4 +294,11 @@ export function playbackValidationError(scenario: Pick<Scenario, 'actors' | 'ste
   if (!ids.has(step.reverseFrom) || !ids.has(step.reverseTo)) return `通信「${step.title}」(${step.id}) の復路送信元・復路送信先が存在しないノードを参照しています。`;
  }
  return null;
+}
+
+/** 厳密読込は維持し、画面だけ修復可能なデータを取得する。 */
+export async function loadScenarioForEditor(path: string) {
+ const recovery = { errors: [] as string[], unsafe: false };
+ const scenario = await loadScenario(path, recovery);
+ return { scenario, ...recovery };
 }
