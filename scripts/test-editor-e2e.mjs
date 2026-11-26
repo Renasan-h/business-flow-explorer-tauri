@@ -113,6 +113,9 @@ try {
       const recovered = await loadScenarioForEditor('/scenarios/native/parent-reference.yaml');
       if (recovered.errors.length !== 1 || recovered.scenario.actors.length !== 2 ||
           recovered.scenario.steps.length !== 3 || recovered.unsafe) throw new Error('Parent reference recovery failed');
+      const partial = await loadScenarioForEditor('/scenarios/native/outside.yaml');
+      if (!partial.unsafe || !partial.errors.some(message => message.includes('ルート外'))) throw new Error('Unsafe reference recovery failed');
+      console.log('PASS: parent reference recovery and unsafe reference protection');
       await mustReject('conflict.yaml', '矛盾');
       await mustReject('cycle-a.yaml', '循環参照');
       await mustReject('outside.yaml', 'ルート外');
