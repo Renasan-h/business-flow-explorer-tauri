@@ -217,7 +217,7 @@ export default function App() {
  if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} createNew={false} initial={scenario} loadErrors={loadErrors} unsafeRecovery={unsafeRecovery} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  return <div className="app">
   <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()} disabled={!isTauri()} title={!isTauri() ? 'Tauriデスクトップアプリでのみ利用できます' : undefined}>📁 ローカルのシナリオフォルダを開く</button></div>
-  <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>
+  <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setListError(''); setLoadErrors([]); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>
   <div className="layout">
    <ScenarioSidebar open={scenarioMenuOpen} paths={paths} titles={scenarioTitles} categories={scenarioCategories} selected={selected}
     onClose={() => setScenarioMenuOpen(false)}
@@ -229,7 +229,7 @@ export default function App() {
     {listError && <p className="error">{listError}</p>}
     {error && <p className="error">{error}</p>}
     {loadErrors.length > 0 && <p className="error" role="alert">再生できません。編集画面で修正してください: {loadErrors.join(' / ')}</p>}
-    {scenario && !current && loadErrors.length > 0 && <button disabled>▶ 再生</button>}
+    {scenario && visibleScenario && !current && loadErrors.length > 0 && <><button disabled>▶ 再生</button><div className="scene-size-wrapper"><Scene playbackRevision={playbackRevision} scenario={visibleScenario} step={0} mode={mode} theme={theme} playing={false} speed={speed} focus={false} zoom={zoom} pan={pan} onPan={setPan} onZoom={setZoom} onFinished={advance} onSelectActor={setSelectedActorId}/></div></>}
     {scenario && visibleScenario && current && <><div className="scene-toolbar"><span>通信経路の表示</span><div className="switch"><button type="button" className={focus ? 'selected' : ''} aria-pressed={focus} onClick={() => setFocus(true)}>現在の通信</button><button type="button" className={!focus ? 'selected' : ''} aria-pressed={!focus} onClick={() => setFocus(false)}>全体の接続</button></div></div>{branchGroups(scenario.actors, scenario.steps).length > 0 && <div className="branch-selector">
       <strong>再生する分岐を選択</strong>
       {branchGroups(scenario.actors, scenario.steps).map(group => <label key={group.actor.id}>{group.actor.name}
