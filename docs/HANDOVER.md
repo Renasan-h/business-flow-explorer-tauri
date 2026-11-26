@@ -664,6 +664,14 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - `c88b68b`：既存WIN-04・17・26 E2Eの検証完了位置に個別PASSログを追加。判定条件は変更していない。
 - 今回のテスト実行・CIは未実施。新HEADで手動Full development checksを実行する必要がある。実機残15件はNOT RUNのまま。
 
+## 9.66 Full development checks #45835267339 成功確認（2026-11-26）
+
+- 実行対象HEAD `c3c864ae6452ae35e95adc5b0717e0140cd7749f` と実際のdevelop_tauri HEADの一致を確認。
+- [Run 45835267339](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45835267339) はWindows runnerで `completed/success`。追加した編集データ・再生経路単体テスト合計56 PASS/0 FAIL。
+- Playwright E2E成功。ログでWIN-04/14/15/17/21/23/26のPASSを確認。Rustユニット26 PASS/0 FAIL、Rust check・Windows build・アイコン検証・NSIS/Portable ZIP生成とArtifact upload成功。
+- Artifact名 `business-flow-explorer-dev-windows`、ID `15126735452`、保存期限2026-12-03 14:11:59 UTC（JST 23:11:59）。対象SHAの配布物からWindows実機検証を進める。
+- CIの成功は実機操作のPASSではない。過去報告11 PASS、残15 NOT RUNを維持。今回は文書更新のみ、更新後HEADに対するCIは未実行。
+
 ## 10. 次の作業
 
 **第一候補：CI成功済みの配布物を用いたWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
