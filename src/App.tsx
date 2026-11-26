@@ -2,7 +2,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core';
 import { branchGroups, playbackActors, playbackSteps } from './branchPlayback';
 import { useEffect, useState } from 'react';
 import FlowEditor from './FlowEditor';
-import { listScenarios, loadScenario, playbackValidationError, type Scenario } from './scenario';
+import { listScenarios, loadScenarioForEditor, playbackValidationError, type Scenario } from './scenario';
 
 import Scene from './playback/PlaybackScene';
 import InterfaceDefinitionDrawer from './playback/InterfaceDefinitionDrawer';
@@ -54,6 +54,9 @@ export default function App() {
  const [playbackRevision, setPlaybackRevision] = useState(0);
  const [branchChoices, setBranchChoices] = useState<Record<string, string>>({});
  const [error, setError] = useState('');
+ const [listError, setListError] = useState('');
+ const [loadErrors, setLoadErrors] = useState<string[]>([]);
+ const [unsafeRecovery, setUnsafeRecovery] = useState(false);
  const [mode, setMode] = useState<Mode>('technical');
  // 初期状態は全通信線を表示する。
  const [focus, setFocus] = useState(false);
@@ -83,17 +86,17 @@ export default function App() {
   Promise.all([Promise.resolve([{ id: '0', label: '同梱シナリオ' }, ...(nativeFolder ? [{ id: 'native', label: nativeFolder }] : [])]), listScenarios(activeRoot)])
    .then(async ([roots, paths]) => {
     setScenarioRoots(roots);
-    const results = await Promise.allSettled(paths.map(path => loadScenario(path)));
+    const results = await Promise.allSettled(paths.map(path => loadScenarioForEditor(path)));
     if (cancelled) return;
     const valid = results.flatMap((result, index) => result.status === 'fulfilled'
-     ? [{ path: paths[index], scenario: result.value }] : []);
+     ? [{ path: paths[index], scenario: result.value.scenario }] : []);
     const failures = results.flatMap((result, index) => result.status === 'rejected'
      ? [paths[index] + ': ' + String(result.reason)] : []);
     const validPaths = valid.map(item => item.path);
     setPaths(validPaths);
     setScenarioTitles(Object.fromEntries(valid.map(item => [item.path, item.scenario.metadata.title])));
     setScenarioCategories(Object.fromEntries(valid.map(item => [item.path, item.scenario.metadata.category || '未分類'])));
-    setError(failures.length ? failures.length + '件のシナリオを読み込めませんでした: ' + failures.join(' / ') : '');
+    setListError(failures.length ? failures.length + '件のシナリオを読み込めませんでした: ' + failures.join(' / ') : '');
     setSelected(current => validPaths.includes(current) ? current : validPaths[0] || '');
     if (validPaths.length === 0) setScenario(null);
    })
@@ -115,10 +118,14 @@ export default function App() {
   setBranchChoices({});
   // 前のシナリオの編集ボタンや内容を、読み込み完了まで表示しない。
   setScenario(null);
-  loadScenario(selected)
+  setLoadErrors([]);
+  setUnsafeRecovery(false);
+  loadScenarioForEditor(selected)
    .then(loaded => {
     if (cancelled) return;
-    setScenario(loaded);
+    setScenario(loaded.scenario);
+    setLoadErrors(loaded.errors);
+    setUnsafeRecovery(loaded.unsafe);
     setError('');
    })
    .catch(error => {
@@ -151,6 +158,7 @@ export default function App() {
  // 終了後の再生は先頭から開始し、通常の一時停止からは現在位置で再開する。
  const togglePlayback = () => {
   if (playing) { setPlaying(false); return; }
+  if (loadErrors.length) return;
   if (scenario) {
    const playbackError = playbackValidationError({ actors: scenario.actors, steps: routes });
    if (playbackError) { setError(playbackError); setPlaying(false); return; }
@@ -206,7 +214,7 @@ export default function App() {
   };
   return <FlowEditor key={"new-flow-" + activeRoot} createNew initial={blank} scenarioPath={"/scenarios/" + activeRoot + "/new-flow.yaml"} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  }
- if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} createNew={false} initial={scenario} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
+ if (editorMode === 'edit' && scenario) return <FlowEditor key={selected} createNew={false} initial={scenario} loadErrors={loadErrors} unsafeRecovery={unsafeRecovery} scenarioPath={selected} onClose={() => { setEditorMode('none'); setScenarioReload(value => value + 1); }} />;
  return <div className="app">
   <div className="native-folder-toolbar"><button type="button" onClick={() => void selectNativeFolder()} disabled={!isTauri()} title={!isTauri() ? 'Tauriデスクトップアプリでのみ利用できます' : undefined}>📁 ローカルのシナリオフォルダを開く</button></div>
   <AppHeader roots={scenarioRoots} activeRoot={activeRoot} onRootChange={value => { setActiveRoot(value); setScenario(null); setPaths([]); setSelected(''); setError(''); setPlaying(false); }} theme={theme} onThemeChange={setTheme} onReload={() => { setPlaying(false); setScenarioReload(value => value + 1); }}/>
@@ -217,8 +225,11 @@ export default function App() {
     onCreate={() => { setScenarioMenuOpen(false); setPlaying(false); setEditorMode('new'); }}/>
    <main>
     <button type="button" className="scenario-menu-toggle" aria-label="シナリオ一覧を開く" aria-controls="scenario-navigation" aria-expanded={scenarioMenuOpen} onClick={() => setScenarioMenuOpen(true)}>☰ <span>シナリオ一覧</span></button>
-    <div className="top"><div><h1>{scenario?.metadata.title || '読み込み中...'}</h1><p>{scenario?.metadata.description}</p></div>{scenario && !error && <div className="switch"><button type="button" onClick={() => { setPlaying(false); setEditorMode('edit'); }}>✎ フローを編集</button><button className={mode === 'technical' ? 'selected' : ''} onClick={() => setMode('technical')}>Technical</button><button className={mode === 'illustration' ? 'selected' : ''} onClick={() => setMode('illustration')}>Illustration</button></div>}</div>
+    <div className="top"><div><h1>{scenario?.metadata.title || '読み込み中...'}</h1><p>{scenario?.metadata.description}</p></div>{scenario && <div className="switch"><button type="button" onClick={() => { setPlaying(false); setEditorMode('edit'); }}>✎ フローを編集</button><button className={mode === 'technical' ? 'selected' : ''} onClick={() => setMode('technical')}>Technical</button><button className={mode === 'illustration' ? 'selected' : ''} onClick={() => setMode('illustration')}>Illustration</button></div>}</div>
+    {listError && <p className="error">{listError}</p>}
     {error && <p className="error">{error}</p>}
+    {loadErrors.length > 0 && <p className="error" role="alert">再生できません。編集画面で修正してください: {loadErrors.join(' / ')}</p>}
+    {scenario && !current && loadErrors.length > 0 && <button disabled>▶ 再生</button>}
     {scenario && visibleScenario && current && <><div className="scene-toolbar"><span>通信経路の表示</span><div className="switch"><button type="button" className={focus ? 'selected' : ''} aria-pressed={focus} onClick={() => setFocus(true)}>現在の通信</button><button type="button" className={!focus ? 'selected' : ''} aria-pressed={!focus} onClick={() => setFocus(false)}>全体の接続</button></div></div>{branchGroups(scenario.actors, scenario.steps).length > 0 && <div className="branch-selector">
       <strong>再生する分岐を選択</strong>
       {branchGroups(scenario.actors, scenario.steps).map(group => <label key={group.actor.id}>{group.actor.name}
@@ -231,7 +242,7 @@ export default function App() {
         {group.options.map(option => <option key={option.id} value={option.id}>{option.branchLabel || option.title}</option>)}
        </select>
       </label>)}
-     </div>}<PlaybackControls zoom={zoom} step={step} stepCount={routes.length} playing={playing} finished={finished} speed={speed}
+     </div>}<PlaybackControls playbackDisabled={loadErrors.length > 0} zoom={zoom} step={step} stepCount={routes.length} playing={playing} finished={finished} speed={speed}
      onZoomOut={() => setZoom(v => clampZoom(v / 1.2))}
      onZoomIn={() => setZoom(v => clampZoom(v * 1.2))}
      onResetViewport={resetViewport}
