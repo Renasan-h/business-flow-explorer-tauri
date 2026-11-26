@@ -509,7 +509,7 @@ export default function FlowEditor({ initial, onClose, scenarioPath, createNew, 
   // 保存ダイアログ表示中の状態変化に左右されないよう、保存対象を固定する。
   const snapshotAtSave = snapshot();
   setMessage('');
-  if (unsafeRecovery) { setMessage('参照先の領域・IF定義を失う可能性があるため保存できません。元YAMLの参照を修正してください。'); return false; }
+  if (unsafeRecovery) { setMessage('参照先のデータを失う可能性があるため保存できません。元YAMLの参照を修正してください。'); return false; }
   const validationError = validateEditorScenario(actors, steps, groups);
   if (validationError) { setMessage(validationError); return false; }
   if (loadErrors.some(error => error.includes('steps内のfileには親シナリオ')) && !window.confirm('親シナリオへの不正な参照を直接展開したYAMLとして保存します。参照形式は保持されません。保存しますか？')) return false;
