@@ -24,14 +24,14 @@ export default function EditorEdges({ actors, steps, showLines, selectedStep, to
        // 逆方向も接続されている場合だけ線をずらす。片方向は中央の1本。
        const bidirectional = Boolean(step.bidirectional) || steps.some(other => other.actions.some(otherAction =>
         otherAction.from === action.to && otherAction.to === action.from));
-       const forward = bidirectional ? offsetRoute(points, -12) : points;
+       const forward = bidirectional && !(step.routing === 'orthogonal' && step.waypoints?.length) ? offsetRoute(points, -12) : points;
        const path = routePath(forward);
        // 復路は送信先→送信元で経路を再計算する。逆方向の法線で別レーンに配置する。
        const reversePoints = step.bidirectional && step.reverseFrom && step.reverseTo
         ? (step.routing === 'orthogonal' && step.reverseWaypoints?.length
          ? routeViaWaypoints(actors, step.reverseFrom, step.reverseTo, step.reverseWaypoints)
          : routeConnection(actors, step.reverseFrom, step.reverseTo, step.routing ?? 'straight')) : [];
-       const reversePath = routePath(offsetRoute(reversePoints, -12));
+       const reversePath = routePath(step.routing === 'orthogonal' && step.reverseWaypoints?.length ? reversePoints : offsetRoute(reversePoints, -12));
        const middle = pointOnRoute(forward, .5);
        return <g key={step.id + '-' + index} data-step-id={step.id} className="editor-edge" onClick={event => { event.stopPropagation(); if (tool === 'multi') return; onSelect(step.id); }}>
         <path d={path} fill="none" stroke="transparent" strokeWidth="18"/>
