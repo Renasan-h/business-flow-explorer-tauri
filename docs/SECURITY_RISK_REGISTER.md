@@ -4,18 +4,18 @@
 
 ## 評価基準
 
-優先度は影響・攻撃条件・対策コストを基準とし、CVSSとは区別します。
+優先度は影響・攻撃条件・対策コストを基準とし、CVSSとは区別します。個別の依存ライブラリの安全性は監査結果に基づいて判断してください。
 
 ## アプリ固有のリスク
 
 | ID | 優先度 | 対象・根拠  | リスクと対応案 |
 | --- | --- | --- | --- |
-| APP-01 | 中 | `src-tauri/tauri.conf.json` の `app.security.csp: null` | ローカル専用・外部バックエンドAPIなしという利用形態を踏まえ、CSPは設定されていない。CSPはバックエンドの有無と無関係にXSSの被害軽減に役立つため、外部コンテンツ導入・信頼境界変更時に再評価する。 |
-| APP-02 | 高 | `src-tauri/src/lib.rs` の `resolve_existing`、`replace_yaml_checked` | 読込時のcanonicalize・保存時のsymlink_metadata・保存競合チェックはを備える。ただしファイル検査から実操作までの外部プロセスによる差し替え競合（TOCTOU）のリスクが残る。リンク・ディレクトリ差し替えの並行試験とWindowsでの権限検証を追加する。 |
+| APP-01 | 対応保留 | `src-tauri/tauri.conf.json` の `app.security.csp: null` | ローカル専用・外部バックエンドAPIなしという利用形態を踏まえ、CSPは設定されていない。CSPはバックエンドの有無と無関係にXSSの被害軽減に役立つため、外部コンテンツ導入・信頼境界変更時に再評価する。 |
+| APP-02 | 高 | `src-tauri/src/lib.rs` の `resolve_existing`、`replace_yaml_checked` | 読込時のcanonicalize・保存時のsymlink_metadata・保存競合チェックを備える。ただしファイル検査から実操作までの外部プロセスによる差し替え競合（TOCTOU）のリスクが残る。リンク・ディレクトリ差し替えの並行試験とWindowsでの権限検証を追加する。 |
 | APP-03 | 中 | `src-tauri/src/lib.rs` の `list_yaml` | 深さ32階層、探索項目50,000件、YAML10,000件の上限を設ける。大量フォルダでの実機負荷、上限時のUI通知、シンボリックリンク差し替え競合に注意する。 |
-| APP-04 | 中 | `src/scenario.ts` の `readFragments` | 循環参照・ルート逸脱防止あり。参照展開の負荷は実用規模で評価する。 |
-| APP-05 | 中 | `src/scenario.ts` のYAMLパース・Zod検証 | 実際の読込・描画・操作・保存性能を現実的なノード・通信数で測定し、通常利用で問題が起こる場合に修正。 |
-| APP-06 | 中 | `src-tauri/src/lib.rs` の `replace_yaml_checked` | 同一プロセス内ロック・外部変更比較・一時ファイル・バックアップ・失敗時復元は実装済み。電源断、ウイルス対策ソフトによるファイルロック、バックアップ削除失敗の復旧手順をWindows実機で検証する。 |
+| APP-04 | 要評価 | `src/scenario.ts` の `readFragments` | 循環参照・ルート逸脱防止あり。参照展開の負荷は実用規模で評価する。 |
+| APP-05 | 要評価 | `src/scenario.ts` のYAMLパース・Zod検証 | 実際の読込・描画・操作・保存性能を現実的なノード・通信数で測定し、通常利用で問題が起こる場合に修正。 |
+| APP-06 | 中 | `src-tauri/src/lib.rs` の `replace_yaml_checked` | 同一プロセス内ロック・外部変更比較・一時ファイル・バックアップ・失敗時復元を備える。電源断、ウイルス対策ソフトによるファイルロック、バックアップ削除失敗の復旧手順をWindows実機で検証する。 |
 | APP-07 | 中 | `src-tauri/capabilities/default.json` | `core:default` のみ許可。独自invokeコマンドはシナリオフォルダ選択・列挙・読書き・作成を提供する。コマンド入力は信頼せずRust側で制限する方針とし、Tauri権限・公開コマンドの棚卸しを行う。 |
 | APP-08 | 低 | 配布形態・Windows WebView2 | Portable ZIPは完全なデータ隔離を保証しない。WebView2ランタイム更新、配布物のハッシュ・署名・出所検証を運用に追加する。 |
 
