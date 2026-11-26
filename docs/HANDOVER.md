@@ -642,9 +642,16 @@ P0対応時に確認した基準HEAD：`8982f0f46a0733da07d6e3a3adc64ed3293e38fc
 - 前段E2E失敗によりRust unit/check・Windows build・配布検証はSKIPPED。修正後HEADに対するCI、Windows実機受け入れは未実行。次回Full development checksは手動起動して検証する。
 - 旧Windows実機報告11 PASS、残15 NOT RUNは維持する。
 
+## 9.63 Full development checks 2回成功（2026-11-26）
+
+- 開始時HEAD `69e6cb8`。Run [45670358366](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45670358366) と [45672819318](https://github.com/Renasan-h/business-flow-explorer-tauri/actions/runs/45672819318) は同SHAでsuccess。ジョブとログを確認。
+- WIN-14往復・片方向・復路未設定、WIN-15分岐、WIN-16参照境界、WIN-21複数選択、WIN-23空データ保存拒否、既存編集E2E成功。Rust 26 PASS/0 FAIL、compile check、Windowsビルド・配布検証・Artifactアップロード成功。
+- `b98a125`：WINDOWS_ACCEPTANCE_TESTS.mdに自動検証結果を追記。Windows実機は過去報告11 PASS、残15 NOT RUN。新しいアプリ本体変更なし。今回のドキュメント更新SHAに対するCIは未実行。
+- 次は生成済みPortable ZIPでWindows実機受け入れを優先。GHAは手動のみ。不要な再実行は避ける。
+
 ## 10. 次の作業
 
-**第一候補：新規Playwrightケースの実行とWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
+**第一候補：CI成功済みの配布物を用いたWindows実機未検証15ケース（P0: WIN-08・22・23・16）の受け入れ検証。性能測定機能はユーザー指示で区切り済み。CSP追加は保留。CIは手動実行のみ。** ユーザーから「続けて」と指示されたら、GitHub最新状態を確認して優先順に着手する。Windows実機を操作できない環境では、テスト手順・自動化可能な部分を整備し、実機未検証を明記する。
 
 ## 11. ドキュメント運用
 
