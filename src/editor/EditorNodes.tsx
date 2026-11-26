@@ -4,8 +4,9 @@ import { NodeIcon } from '../NodeIcon';
 type Actor = Scenario['actors'][number];
 
 /** SVGノードの見た目と操作ハンドル。ノード状態は親が管理する。 */
-export default function EditorNodes({ actors, selectedActors, tool, source, selectedActor, nodeNumbers, onClickActor, onDeleteActor }: {
+export default function EditorNodes({ actors, errorActorIds = [], selectedActors, tool, source, selectedActor, nodeNumbers, onClickActor, onDeleteActor }: {
  actors: Actor[];
+ errorActorIds?: string[];
  selectedActors: string[];
  tool: 'move' | 'connect' | 'multi';
  source: string | null;
@@ -15,8 +16,8 @@ export default function EditorNodes({ actors, selectedActors, tool, source, sele
  onDeleteActor: (id: string) => void;
 }) {
  return <>
-      {actors.map(actor => { const NODE_WIDTH = actor.width ?? 150; const NODE_HEIGHT = actor.height ?? 76; return <g key={actor.id} data-actor-id={actor.id} className={`editor-node${selectedActors.includes(actor.id) && tool === "multi" ? " editor-node-multiselected" : ""}`} onClick={() => { if (tool !== "multi") onClickActor(actor.id); }}>
-       <rect x={actor.position.x - NODE_WIDTH / 2} y={actor.position.y - NODE_HEIGHT / 2} width={NODE_WIDTH} height={NODE_HEIGHT} rx="12" fill={actor.color ?? (source === actor.id ? '#165c73' : selectedActor === actor.id ? '#1e5a88' : '#20314a')} stroke={source === actor.id || selectedActor === actor.id ? '#22d3ee' : '#7398c9'} strokeWidth="2"/>
+      {actors.map(actor => { const NODE_WIDTH = actor.width ?? 150; const NODE_HEIGHT = actor.height ?? 76; return <g key={actor.id} data-actor-id={actor.id} data-error={errorActorIds.includes(actor.id) || undefined} className={`editor-node${selectedActors.includes(actor.id) && tool === "multi" ? " editor-node-multiselected" : ""}`} onClick={() => { if (tool !== "multi") onClickActor(actor.id); }}>
+       <rect x={actor.position.x - NODE_WIDTH / 2} y={actor.position.y - NODE_HEIGHT / 2} width={NODE_WIDTH} height={NODE_HEIGHT} rx="12" fill={actor.color ?? (source === actor.id ? '#165c73' : selectedActor === actor.id ? '#1e5a88' : '#20314a')} stroke={errorActorIds.includes(actor.id) ? '#ef4444' : source === actor.id || selectedActor === actor.id ? '#22d3ee' : '#7398c9'} strokeWidth={errorActorIds.includes(actor.id) ? 4 : 2}/>
        <circle cx={actor.position.x - NODE_WIDTH / 2 + 13} cy={actor.position.y - NODE_HEIGHT / 2 + 13} r="15" fill="#22d3ee" />
        <text x={actor.position.x - NODE_WIDTH / 2 + 13} y={actor.position.y - NODE_HEIGHT / 2 + 18} textAnchor="middle" fill="#082238" fontSize="13" fontWeight="bold">{nodeNumbers[actor.id]}</text>
        <NodeIcon type={actor.type} x={actor.position.x} y={actor.position.y - 10} size={29} color="#f0f6ff"/>
