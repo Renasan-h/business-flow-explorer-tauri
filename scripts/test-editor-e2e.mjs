@@ -900,6 +900,7 @@ try {
   await page.getByRole('button', { name: /最初から再生/ }).waitFor({ timeout: 10000 });
   await page.getByText('STEP 5 / 5', { exact: true }).waitFor();
   if (await next.isEnabled()) throw new Error('WIN-04: Next remains enabled after the final step');
+  console.log('PASS: WIN-04 playback controls and final step');
   await page.getByRole('button', { name: '↺', exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -1137,6 +1138,7 @@ try {
   if (reloadedTitles.join() !== downloadedScenario.steps.map((step, index) => (index + 1) + '. ' + step.title).join()) {
     throw new Error('WIN-26: playback order differs from the saved YAML');
   }
+  console.log('PASS: WIN-26 saved playback order after reload');
   // WIN-17: 保存したYAMLを再読込し、往路リンクから定義と項目を開けることを確認する。
   await page.getByRole('button', { name: '往路IF: 注文受付API' }).click();
   const definition = page.getByRole('dialog', { name: 'IF定義' });
@@ -1144,6 +1146,7 @@ try {
   await definition.getByText(/orderId.*string.*必須/).waitFor();
   await definition.getByRole('button', { name: 'IF定義を閉じる' }).click();
   await definition.waitFor({ state: 'hidden' });
+  console.log('PASS: WIN-17 interface definition saved, reloaded and opened');
 
   await page.getByRole('button', { name: /フローを編集/ }).click();
   await page.locator('[data-actor-id]').first().waitFor();
