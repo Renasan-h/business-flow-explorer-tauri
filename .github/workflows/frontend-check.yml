@@ -17,7 +17,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci --no-audit --no-fund
-      - name: TypeScript and frontend build
-        run: npm run build:web
+      - name: Frontend build and unit tests
+        run: npm run test:unit
       - name: Verify scenario manifest
         run: git diff --exit-code -- public/scenarios/manifest.json
