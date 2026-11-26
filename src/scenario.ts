@@ -191,6 +191,7 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  // stepsの配列順に通常ステップとサブシナリオを展開する。
  for (const entry of data.steps ?? []) {
   if ('file' in entry) {
+   try {
    const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
    // steps内のfile参照はstepsだけを持つ断片YAMLも許可する。
    // 親シナリオのschemaVersionとmetadataはloadScenarioで検証する。
