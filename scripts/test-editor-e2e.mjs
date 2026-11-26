@@ -104,6 +104,15 @@ try {
           if (!String(error).includes(expected)) throw error;
         }
       }
+      files.set('parent-reference.yaml', {
+        schemaVersion: '1.0', metadata: { id: 'ref', title: 'ref', description: '', category: 'test' },
+        steps: [{ file: 'parent.yaml' }],
+      });
+      await mustReject('parent-reference.yaml', 'steps内のfileには親シナリオ');
+      const { loadScenarioForEditor } = await import('/src/scenario.ts');
+      const recovered = await loadScenarioForEditor('/scenarios/native/parent-reference.yaml');
+      if (recovered.errors.length !== 1 || recovered.scenario.actors.length !== 2 ||
+          recovered.scenario.steps.length !== 3 || recovered.unsafe) throw new Error('Parent reference recovery failed');
       await mustReject('conflict.yaml', '矛盾');
       await mustReject('cycle-a.yaml', '循環参照');
       await mustReject('outside.yaml', 'ルート外');
