@@ -35,7 +35,7 @@ npm run check:version   # package.json / Tauri / Cargo のバージョン整合
 npm run check:version -- v0.1.0 # 指定リリースタグとの一致も検証
 ```
 
-バージョン更新時は `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` を同じ値に変更し、`npm run check:version -- vX.Y.Z` で確認してください。リリースノートの雛形は `docs/RELEASE_NOTES_v0.1.0.md` です。
+バージョン更新時は `package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml` を同じ値に変更し、`npm run check:version -- vX.Y.Z` で確認してください。リリースノートの例は `docs/RELEASE_NOTES_v0.1.0.md` です。
 
 ### 個別コマンド
 
@@ -69,18 +69,16 @@ NSISインストーラー：`src-tauri/target/release/bundle/nsis/`。
 
 ## CIの手動実行
 
-無料枠節約のため、`Full development checks`、`Frontend checks`、`Rust unit tests`、`Rust compile check`、`Tauri Windows release build` はすべて `workflow_dispatch` のみで起動します。pushやPull Requestでは自動実行されません。
+`Full development checks`、`Frontend checks`、`Rust unit tests`、`Rust compile check`、`Tauri Windows release build` はすべて `workflow_dispatch` のみで起動します。pushやPull Requestでは自動実行されません。
 
 GitHubのリポジトリ → **Actions** → ワークフロー選択 → **Run workflow** → 対象ブランチを選択 → **Run workflow** を押してください。リリースワークフローは `main` を選択し、`release_ref` を指定します。
-
-**手動起動に変更しても、請求・利用上限によるGitHub Actionsの起動制限は解除されません。**
 
 ## CIの判定ルール
 
 1. 対象コミットのSHAとワークフロー実行番号を記録します。
 2. ジョブが**実際に開始されたか**確認します。
 3. 開始後に失敗した場合のみ、失敗ステップとログを確認してコードや環境の原因を切り分けます。
-4. **GitHubの請求・支払い・利用上限によりジョブが開始されない場合は「未検証」** と扱います。コード不具合とは断定しません。
+4. ジョブが開始されない場合は実行環境やサービスの状態を確認します。
 5. 手動で実行したジョブの `success` を確認します。未実行のコミットは「CI未検証」と明記し、過去の別コミットの成功を流用しません。
 
 CIで成功してもWindows実機でのGUI操作・保存・再起動・Portable ZIP起動をすべて保証するわけではありません。
