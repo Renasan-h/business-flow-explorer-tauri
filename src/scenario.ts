@@ -165,21 +165,25 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
  };
  // 共通Actorファイルにはステップを含めない。
  for (const actorFile of data.actorFiles ?? []) {
+  try {
   const resolved = new URL(actorFile, url);
   const fragment = await readFragments(resolved.href, nextAncestors, expectedRoot, recovery);
   if (fragment.root || fragment.steps.length > 0) {
    throw new Error('actorFilesにはactorsのみを定義してください: ' + actorFile);
   }
   fragment.actors.forEach(addActor);
+  } catch (error) { if (!recovery) throw error; recovery.errors.push(actorFile + ': ' + String(error)); recovery.unsafe = true; }
  }
  // actors配列に記述された順番でActor定義と外部ファイルを展開する。
  for (const entry of data.actors ?? []) {
   if ('file' in entry) {
+   try {
    const fragment = await readFragments(new URL(entry.file, url).href, nextAncestors, expectedRoot, recovery);
    if (fragment.root || fragment.steps.length > 0) {
     throw new Error('actors内のfileにはActor定義のみを指定してください: ' + entry.file);
    }
    fragment.actors.forEach(addActor);
+   } catch (error) { if (!recovery) throw error; recovery.errors.push(entry.file + ': ' + String(error)); recovery.unsafe = true; }
   } else {
    addActor(entry);
   }
@@ -209,6 +213,7 @@ async function readFragments(path: string, ancestors: Set<string>, rootPrefix?: 
     });
    }
    steps.push(...fragment.steps);
+   } catch (error) { if (!recovery) throw error; recovery.errors.push(entry.file + ': ' + String(error)); recovery.unsafe = true; }
   } else {
    steps.push(entry);
   }
@@ -229,8 +234,8 @@ export async function loadScenario(path: string, recovery?: { errors: string[]; 
  if (!result.root) throw new Error('親シナリオにはschemaVersionとmetadataが必要です');
  // ローカルの編集中ドラフトは空でも読み込める。再生用の同梱シナリオは従来どおり検証する。
  const isNativeDraft = path.startsWith('/scenarios/native/');
- if (!isNativeDraft && result.actors.length < 2) throw new Error('actorは2件以上必要です');
- if (!isNativeDraft && result.steps.length === 0) throw new Error('stepは1件以上必要です');
+ if (!recovery && !isNativeDraft && result.actors.length < 2) throw new Error('actorは2件以上必要です');
+ if (!recovery && !isNativeDraft && result.steps.length === 0) throw new Error('stepは1件以上必要です');
  const ids = new Set(result.actors.map(item => item.id));
  const groupIds = new Set<string>();
  for (const group of result.root.groups ?? []) {
