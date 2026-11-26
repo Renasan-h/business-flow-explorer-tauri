@@ -1044,6 +1044,23 @@ try {
   await openReceiveMenu();
   await page.getByRole('menuitem', { name: '復路の経由点を追加' }).dispatchEvent('click');
   await receiveEdge.locator('[data-waypoint-direction="reverse"]').waitFor();
+  // WIN-14: 表示経路は手動経由点の中心を通り、全線分が直交する。
+  await receiveEdge.evaluate(edge => {
+    const paths = [...edge.querySelectorAll('path')].filter(path => path.getAttribute('stroke') !== 'transparent');
+    for (const [index, selector] of ['[data-waypoint-index]:not([data-waypoint-direction])', '[data-waypoint-direction="reverse"]'].entries()) {
+      const path = paths[index];
+      const points = [...path.getAttribute('d').matchAll(/[ML]([^ ]+) ([^ ]+)/g)].map(match => ({ x: Number(match[1]), y: Number(match[2]) }));
+      if (points.length < 2 || points.slice(1).some((point, i) => point.x !== points[i].x && point.y !== points[i].y)) {
+        throw new Error('WIN-14: non-orthogonal manual route');
+      }
+      for (const handle of edge.querySelectorAll(selector)) {
+        const x = Number(handle.getAttribute('cx'));
+        const y = Number(handle.getAttribute('cy'));
+        if (!points.some(point => point.x === x && point.y === y)) throw new Error('WIN-14: route misses waypoint center');
+      }
+    }
+  });
+  console.log('PASS: WIN-14 manual route passes waypoint centers');
   await page.keyboard.press('Control+z');
   await page.getByRole('button', { name: '1. 注文受付' }).click();
   if (await receiveEdge.locator('[data-waypoint-direction="reverse"]').count() !== 0 ||
